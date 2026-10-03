@@ -8,6 +8,9 @@ const chatForm = document.getElementById("chatForm");
 const attachmentButton = document.getElementById("attachmentButton");
 const fileInput = document.getElementById("fileInput");
 const attachmentPreview = document.getElementById("attachmentPreview");
+const tokenMeterButton = document.getElementById("tokenMeterButton");
+const tokenMeterPercent = document.getElementById("tokenMeterPercent");
+const tokenMeterFill = document.getElementById("tokenMeterFill");
 const settingsButton = document.getElementById("settingsButton");
 const settingsPanel = document.getElementById("settingsPanel");
 const settingsClose = document.getElementById("settingsClose");
@@ -501,6 +504,36 @@ function openSettings() {
   settingsPanel.classList.add("open");
   settingsPanel.setAttribute("aria-hidden", "false");
 }
+
+async function refreshTokenMeter() {
+  if (!tokenMeterPercent || !tokenMeterFill) return;
+  try {
+    const response = await fetch("/api/credits", { cache: "no-store" });
+    const data = await response.json();
+    const bucket = data?.tokens || {};
+    const remaining = Number(bucket.remaining);
+    const limit = Number(bucket.limit);
+    const percent = Number(bucket.remaining_percent);
+    if (!Number.isFinite(remaining) || !Number.isFinite(limit) || limit <= 0) {
+      tokenMeterPercent.textContent = "—";
+      tokenMeterFill.style.setProperty("--meter-progress", "0deg");
+      tokenMeterButton?.setAttribute("title", "Token usage will appear after Strata contacts the API");
+      return;
+    }
+    const safePercent = Math.max(0, Math.min(100, percent));
+    tokenMeterPercent.textContent = safePercent >= 10 ? Math.round(safePercent) + "%" : safePercent.toFixed(1) + "%";
+    tokenMeterFill.style.setProperty("--meter-progress", (safePercent * 3.6) + "deg");
+    tokenMeterButton?.setAttribute("title", Math.round(remaining).toLocaleString() + " tokens remaining in the current rate-limit window");
+  } catch {
+    tokenMeterPercent.textContent = "—";
+  }
+}
+
+if (tokenMeterButton) {
+  tokenMeterButton.addEventListener("click", refreshTokenMeter);
+}
+refreshTokenMeter();
+setInterval(refreshTokenMeter, 15000);
 
 function closeConversationDrawer() {
   closeSettings();
