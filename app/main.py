@@ -171,7 +171,11 @@ async def chat(req: Request):
             system_prompt = load_instructions()
 
             await tool_events.put({"message": "Understanding your message..."})
-            corrected_message = await client.correct_message(message)
+            try:
+                corrected_message = await client.correct_message(message)
+            except Exception:
+                logger.exception("Message correction failed")
+                corrected_message = message
 
             if pasted_text:
                 system_prompt += (
