@@ -7,6 +7,7 @@ for deployment compatibility. Its value is treated as the Groq API key.
 import ast
 import json
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 import aiohttp
 
@@ -14,6 +15,21 @@ from app.config import GEMINI_API_KEY
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MODEL = "openai/gpt-oss-120b"
+VISION_MODEL = "qwen/qwen3.8-27b"
+
+TOOL_CATALOG = {
+    "browser_search": "Search the live web for current information.",
+    "code_interpreter": "Run Python code for calculations, data analysis, and verification.",
+    "calculator": "Evaluate mathematical expressions safely.",
+    "get_current_time": "Get the current UTC date and time.",
+    "format_json": "Validate and pretty-print JSON.",
+    "search_web": "Run a focused real-time web search.",
+    "deep_research": "Research a complex topic across multiple sources.",
+    "study": "Build a structured lesson, practice set, and self-test.",
+    "get_pasted_text": "Read text explicitly supplied by the user.",
+    "analyze_image": "Analyze an uploaded image, including OCR and visual understanding.",
+    "get_navigation_links": "Create navigation links for Apple Maps, Google Maps, and Waze.",
+}
 
 
 class GroqClient:
@@ -86,9 +102,9 @@ class GroqClient:
         except Exception as exc:
             return f"Calculation error: {exc}"
 
-    async def _completion(self, messages: list[dict], tools=None, tool_choice="auto", max_tokens=2048, temperature=0.2) -> dict:
+    async def _completion(self, messages: list[dict], tools=None, tool_choice="auto", max_tokens=2048, temperature=0.2, model=DEFAULT_MODEL) -> dict:
         payload = {
-            "model": DEFAULT_MODEL,
+            "model": model,
             "messages": messages,
             "stream": False,
             "max_tokens": max_tokens,
@@ -207,12 +223,88 @@ class GroqClient:
         )
         return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
 
+
+    async def analyze_image(self, image_data: str, prompt: str = "Analyze this image carefully and answer the user's request. If there is text, transcribe the relevant text accurately.") -> str:
+        if not image_data.startswith("data:image/"):
+            return "The attached file is not a supported image."
+
+        data = await self._completion(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are Strata's private visual-analysis capability. Analyze the supplied "
+                        "image accurately. Do not invent visual details. Read visible text when asked, "
+                        "describe uncertainty, and follow the user's requested task."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_data}},
+                    ],
+                },
+            ],
+            max_tokens=4096,
+            temperature=0.4,
+            model=VISION_MODEL,
+        )
+        return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+
+    @staticmethod
+    def discover_tools(query: str) -> str:
+        words = {word.lower() for word in str(query).replace("-", " ").split() if len(word) > 2}
+        ranked = []
+        for name, description in TOOL_CATALOG.items():
+            haystack = f"{name} {description}".lower()
+            score = sum(1 for word in words if word in haystack)
+            if score:
+                ranked.append((score, name, description))
+        ranked.sort(reverse=True)
+        if not ranked:
+            return json.dumps(
+                [{"name": name, "description": description} for name, description in TOOL_CATALOG.items()],
+                ensure_ascii=False,
+            )
+        return json.dumps(
+            [{"name": name, "description": description} for _, name, description in ranked[:8]],
+            ensure_ascii=False,
+        )
+
+    @staticmethod
+    def get_navigation_links(destination: str, mode: str = "driving", source: str = "") -> str:
+        destination = str(destination).strip()
+        source = str(source).strip()
+        mode = str(mode or "driving").strip().lower()
+        mode = {"driving": "driving", "walking": "walking", "transit": "transit", "bicycling": "bicycling"}.get(mode, "driving")
+        if not destination:
+            return "A destination is required."
+
+        apple = f"https://maps.apple.com/directions?destination={quote(destination)}&mode={mode}"
+        google = f"https://www.google.com/maps/dir/?api=1&destination={quote(destination)}&travelmode={mode}"
+        waze = f"https://www.waze.com/ul?q={quote(destination)}&navigate=yes"
+        if source:
+            apple += f"&source={quote(source)}"
+            google += f"&origin={quote(source)}"
+        return json.dumps(
+            {
+                "destination": destination,
+                "mode": mode,
+                "apple_maps": apple,
+                "google_maps": google,
+                "waze": waze,
+            },
+            ensure_ascii=False,
+        )
+
     async def run_agent(
         self,
         model: str,
         system_prompt: str,
         messages: list[dict],
         pasted_text: str = "",
+        image_data: str = "",
         on_tool=None,
     ) -> str:
         working = [
@@ -221,6 +313,19 @@ class GroqClient:
         ]
 
         tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "discover_tools",
+                    "description": "Discover Strata's available capabilities based on what the user needs. Use this when the task may require a capability you have not yet selected.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"query": {"type": "string"}},
+                        "required": ["query"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
             {"type": "browser_search"},
             {"type": "code_interpreter"},
             {
@@ -267,6 +372,23 @@ class GroqClient:
             {
                 "type": "function",
                 "function": {
+                    "name": "get_navigation_links",
+                    "description": "Create direct navigation links for Apple Maps, Google Maps, and Waze for a destination.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "destination": {"type": "string"},
+                            "mode": {"type": "string", "enum": ["driving", "walking", "transit", "bicycling"]},
+                            "source": {"type": "string"},
+                        },
+                        "required": ["destination"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "search_web",
                     "description": "Run a focused real-time web search for current or source-dependent information.",
                     "parameters": {
@@ -310,6 +432,21 @@ class GroqClient:
                 },
             },
         ])
+
+        if image_data.startswith("data:image/"):
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "analyze_image",
+                    "description": "Analyze the user's uploaded image. Use this for visual questions, OCR, screenshots, photos, charts, diagrams, or image-based tasks.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"prompt": {"type": "string"}},
+                        "required": ["prompt"],
+                        "additionalProperties": False,
+                    },
+                },
+            })
 
         if pasted_text.strip():
             tools.append({
@@ -385,7 +522,20 @@ class GroqClient:
                     except (TypeError, json.JSONDecodeError):
                         arguments = {}
 
-                    if name == "get_pasted_text":
+                    if name == "discover_tools":
+                        result = self.discover_tools(str(arguments.get("query", "")))
+                    elif name == "get_navigation_links":
+                        result = self.get_navigation_links(
+                            str(arguments.get("destination", "")),
+                            str(arguments.get("mode", "driving")),
+                            str(arguments.get("source", "")),
+                        )
+                    elif name == "analyze_image":
+                        result = await self.analyze_image(
+                            image_data,
+                            str(arguments.get("prompt", "Analyze the image carefully.")),
+                        )
+                    elif name == "get_pasted_text":
                         result = pasted_text
                     elif name == "get_current_time":
                         result = datetime.now(timezone.utc).isoformat()
