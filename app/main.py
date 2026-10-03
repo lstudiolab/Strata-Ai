@@ -33,13 +33,6 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 mem = Memory(DB_PATH)
 
-AVAILABLE_MODELS = {
-    "strata": {"name": "Strata 1.0"},
-    "saber": {"name": "Saber 1.0"},
-    "zen": {"name": "Zen 1.0"},
-    "marcus": {"name": "Marcus 1.0"},
-}
-
 
 def get_default_instructions() -> str:
     return (
@@ -51,9 +44,8 @@ def get_default_instructions() -> str:
     )
 
 
-def load_instructions(model_type: str) -> str:
-    safe_name = model_type if model_type in AVAILABLE_MODELS else "strata"
-    path = INSTRUCTIONS_DIR / f"{safe_name}.txt"
+def load_instructions() -> str:
+    path = INSTRUCTIONS_DIR / "strata.txt"
     if path.is_file():
         text = path.read_text(encoding="utf-8").strip()
         if text:
@@ -91,16 +83,15 @@ async def get_models():
         try:
             model_name = await client.highest_priced_model()
         except Exception:
-            logger.exception("Unable to resolve the current highest-priced OpenRouter model")
+            logger.exception("Unable to resolve the Strata model")
 
     return {
         "models": [
             {
-                "id": key,
-                "name": value["name"],
-                "model": model_name or "openrouter/auto",
+                "id": "strata",
+                "name": "Strata 1.0",
+                "model": model_name,
             }
-            for key, value in AVAILABLE_MODELS.items()
         ]
     }
 
@@ -112,11 +103,11 @@ async def health():
         try:
             resolved_model = await client.highest_priced_model()
         except Exception:
-            logger.exception("OpenRouter model discovery failed during health check")
+            logger.exception("Strata model discovery failed during health check")
 
     return {
         "status": "ok",
-        "provider": "openrouter",
+        "provider": "groq",
         "model": resolved_model,
         "api_key_configured": bool(GEMINI_API_KEY),
     }
@@ -126,7 +117,7 @@ async def health():
 async def chat(req: Request):
     if not GEMINI_API_KEY or client is None:
         return JSONResponse(
-            {"error": "The OpenRouter API key is not configured on the server."},
+            {"error": "The Groq API key is not configured on the server."},
             status_code=503,
         )
 
@@ -139,10 +130,6 @@ async def chat(req: Request):
         return JSONResponse({"error": "Request body must be a JSON object."}, status_code=400)
 
     message = str(body.get("message", "")).strip()
-    model_type = str(body.get("model_type", "strata")).strip() or "strata"
-    if model_type not in AVAILABLE_MODELS:
-        model_type = "strata"
-
     if not message:
         return JSONResponse({"error": "Message is required."}, status_code=400)
 
@@ -167,7 +154,7 @@ async def chat(req: Request):
 
         try:
             model_name = await client.highest_priced_model()
-            system_prompt = load_instructions(model_type)
+            system_prompt = load_instructions()
             messages = make_messages(history, first_question, message)
 
             answer_parts = []
