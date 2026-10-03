@@ -1,5 +1,5 @@
 let isLoading = false;
-let sessionId = null;
+let sessionId = localStorage.getItem("strata_session_id");
 let currentModel = "default";
 
 const messagesContainer = document.getElementById("messages");
@@ -7,8 +7,13 @@ const messageInput = document.getElementById("messageInput");
 const sendButton = document.getElementById("sendButton");
 const modelSelect = document.getElementById("modelSelect");
 
+const API_BASE =
+  (window.STRATA_API_URL || document.documentElement.dataset.apiBase || "")
+    .replace(/\/$/, "");
+
 if (!sessionId) {
   sessionId = "session_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+  localStorage.setItem("strata_session_id", sessionId);
 }
 
 function addMessage(role, text, isStatus = false) {
@@ -23,12 +28,41 @@ function addMessage(role, text, isStatus = false) {
   group.appendChild(msg);
   messagesContainer.appendChild(group);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  return msg;
 }
 
 function updateLastStatus(text) {
   const statuses = messagesContainer.querySelectorAll(".message.status");
   if (statuses.length > 0) {
     statuses[statuses.length - 1].textContent = text;
+  }
+}
+
+function removeLastStatus() {
+  const statuses = messagesContainer.querySelectorAll(".message.status");
+  if (!statuses.length) return;
+  const statusMessage = statuses[statuses.length - 1];
+  statusMessage.parentElement.remove();
+}
+
+async function loadModels() {
+  try {
+    const response = await fetch(API_BASE + "/api/models");
+    if (!response.ok) return;
+
+    const data = await response.json();
+    if (!Array.isArray(data.models)) return;
+
+    modelSelect.replaceChildren();
+    for (const model of data.models) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = model.name;
+      modelSelect.appendChild(option);
+    }
+    modelSelect.value = currentModel;
+  } catch (error) {
+    console.warn("Could not load models:", error);
   }
 }
 
@@ -45,10 +79,13 @@ async function sendMessage() {
 
   addMessage("user", message);
 
+  let assistantMessage = null;
+  let fullAnswer = "";
+
   try {
-    const response = await fetch("/api/chat", {
+    const response = await fetch(API_BASE + "/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
       body: JSON.stringify({
         message,
         session_id: sessionId,
@@ -56,16 +93,68 @@ async function sendMessage() {
       }),
     });
 
-    if (!response.ok || !response.body) {
-      addMessage("assistant", "Failed to connect to the AI server.");
-      resetInput();
+    if (!response.ok) {
+      let errorText = "Failed to connect to the AI server.";
+      try {
+        const errorData = await response.json();
+        if (errorData.error) errorText = errorData.error;
+      } catch (_) {
+        // Keep the generic error when the server did not return JSON.
+      }
+      addMessage("assistant", errorText, false);
+      return;
+    }
+
+    if (!response.body) {
+      addMessage("assistant", "The AI server returned an empty response.");
       return;
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let statusShown = false;
+
+    const processEvent = (event) => {
+      const dataLine = event
+        .split("\n")
+        .find((line) => line.startsWith("data:"));
+
+      if (!dataLine) return;
+
+      const raw = dataLine.replace(/^data:\s?/, "").trim();
+      if (!raw) return;
+
+      try {
+        const payload = JSON.parse(raw);
+
+        if (payload.type === "status") {
+          updateLastStatus(payload.message);
+        } else if (payload.type === "delta") {
+          removeLastStatus();
+          fullAnswer += payload.message || "";
+
+          if (!assistantMessage) {
+            assistantMessage = addMessage("assistant", "");
+          }
+
+          assistantMessage.textContent = fullAnswer;
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else if (payload.type === "answer") {
+          removeLastStatus();
+
+          if (!assistantMessage) {
+            assistantMessage = addMessage("assistant", payload.message || "");
+          } else {
+            assistantMessage.textContent = payload.message || fullAnswer;
+          }
+        } else if (payload.type === "error") {
+          removeLastStatus();
+          addMessage("assistant", payload.message || "The AI request failed.");
+        }
+      } catch (error) {
+        console.warn("SSE parse error:", error);
+      }
+    };
 
     while (true) {
       const { value, done } = await reader.read();
@@ -76,38 +165,16 @@ async function sendMessage() {
       buffer = events.pop() || "";
 
       for (const event of events) {
-        if (!event.startsWith("data: ")) continue;
-
-        const raw = event.replace(/^data:\s*/, "").trim();
-        if (!raw) continue;
-
-        try {
-          const payload = JSON.parse(raw);
-
-          if (payload.type === "status") {
-            if (!statusShown) {
-              addMessage("assistant", payload.message, true);
-              statusShown = true;
-            } else {
-              updateLastStatus(payload.message);
-            }
-          } else if (payload.type === "answer") {
-            const lastGroup = messagesContainer.lastElementChild;
-            if (lastGroup && lastGroup.querySelector(".message.status")) {
-              lastGroup.remove();
-            }
-            addMessage("assistant", payload.message);
-          } else if (payload.type === "error") {
-            addMessage("assistant", payload.message, false);
-          }
-        } catch (err) {
-          console.error("Parse error:", err);
-        }
+        processEvent(event);
       }
     }
-  } catch (err) {
-    addMessage("assistant", "An error occurred while contacting the AI.");
-    console.error(err);
+
+    buffer += decoder.decode();
+    if (buffer.trim()) processEvent(buffer);
+  } catch (error) {
+    console.error("Chat request failed:", error);
+    removeLastStatus();
+    addMessage("assistant", "An error occurred while contacting Strata.");
   } finally {
     resetInput();
   }
@@ -121,6 +188,7 @@ function resetInput() {
 }
 
 sendButton.addEventListener("click", sendMessage);
+
 messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !isLoading) {
     event.preventDefault();
@@ -132,6 +200,7 @@ modelSelect.addEventListener("change", (event) => {
   currentModel = event.target.value;
 });
 
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
+  await loadModels();
   addMessage("assistant", "Hi! I'm Strata AI. How can I help you today?");
 });
