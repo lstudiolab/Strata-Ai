@@ -227,12 +227,13 @@ async def chat(req: Request):
                     ". Treat this as clarification of the same request, not a new request."
                 )
 
-            # There is no fixed conversation limit. When the stored conversation
-            # grows, compact older turns into durable memory and keep the newest turns
-            # verbatim. The database retains every original message.
+            # There is no fixed conversation limit. The database retains every
+            # original message. Context is compacted by message count OR total text
+            # size so very long messages cannot silently overflow the model context.
             memory_summary, summary_through = mem.memory_summary(session_id)
             unsummarized = mem.history_after(session_id, summary_through, limit=200)
-            if len(unsummarized) >= 40:
+            unsummarized_chars = sum(len(content or "") for _, _, content in unsummarized)
+            if len(unsummarized) >= 40 or unsummarized_chars >= 100_000:
                 try:
                     compacted = await client.summarize_memory(
                         memory_summary,
@@ -252,7 +253,32 @@ async def chat(req: Request):
                     logger.exception("Conversation memory compaction failed")
 
             history = mem.history(session_id, limit=32)
-            messages = make_messages(history, first_question, message, memory_summary)
+
+            # mem.add() stores the current user turn before generation. Do not add
+            # that same turn a second time through the conversation anchor.
+            if history and history[-1][0] == "user" and history[-1][1] == message:
+                history = history[:-1]
+
+            # Keep recent context generous enough for long messages while still
+            # reserving room for the system instructions, tools, and current turn.
+            # Older turns remain safely stored and are represented by memory_summary.
+            context_chars = 110_000
+            selected_history = []
+            used_chars = 0
+            for role, content in reversed(history):
+                size = len(content or "")
+                if selected_history and used_chars + size > context_chars:
+                    break
+                selected_history.append((role, content))
+                used_chars += size
+            selected_history.reverse()
+
+            messages = make_messages(
+                selected_history,
+                first_question,
+                message,
+                memory_summary,
+            )
 
             async def on_tool(name: str, round_number: int):
                 labels = {
@@ -300,7 +326,9 @@ async def chat(req: Request):
                 answer = "I couldn't generate a response. Please try again."
 
             # Keep the clean streaming feel in the UI after agent/tool work.
-            chunk_size = 48
+            # Chunking is only for transport/UI responsiveness. The complete answer
+            # is always sent again in the authoritative "answer" event below.
+            chunk_size = 256
             for index in range(0, len(answer), chunk_size):
                 yield f"data: {json.dumps({'type': 'delta', 'message': answer[index:index + chunk_size]})}\n\n"
                 await asyncio.sleep(0.005)
@@ -317,7 +345,7 @@ async def chat(req: Request):
         stream_response(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
