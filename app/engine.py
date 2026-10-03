@@ -156,6 +156,31 @@ class GroqClient:
         normalized = str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
         return normalized or message
 
+    async def summarize_memory(self, existing_summary: str, messages: list[dict]) -> str:
+        """Compress older conversation turns into durable context without deleting them."""
+        transcript = "\n".join(
+            f"{item.get('role', 'user').upper()}: {item.get('content', '')}"
+            for item in messages
+        )
+        prompt = (
+            "Create durable memory for a continuing conversation. Preserve facts, "
+            "decisions, preferences, names, constraints, unresolved questions, important "
+            "technical details, and commitments that may matter later. Remove repetition "
+            "and small talk. Do not invent anything. Keep it compact but information-dense. "
+            "This is memory, not a response to the user.\n\n"
+            + ("Existing memory:\n" + existing_summary + "\n\n" if existing_summary else "")
+            + "New conversation turns:\n" + transcript
+        )
+        data = await self._completion(
+            [
+                {"role": "system", "content": "You maintain Strata's long-term conversation memory."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=3000,
+            temperature=0.1,
+        )
+        return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+
     async def search_web(self, query: str) -> str:
         """Run a focused real-time browser search through Groq's built-in search."""
         data = await self._completion(
