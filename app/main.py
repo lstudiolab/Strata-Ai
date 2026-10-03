@@ -10,89 +10,160 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from google.genai import types
 
-from app.config import GEMINI_API_KEY, HOST, PORT
+from app.config import (
+    CORS_ORIGINS,
+    DB_PATH,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    HOST,
+    PORT,
+)
 from app.engine import client
 from app.memory import Memory
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("strata")
+logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Strata AI")
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+INSTRUCTIONS_DIR = BASE_DIR / "instructions"
 
+app = FastAPI(title="Strata AI", version="1.0.0")
+
+# No browser credentials are used by Strata, so wildcard CORS is safe for the
+# default deployment. Specific origins can be supplied through CORS_ORIGINS.
+allow_all_origins = CORS_ORIGINS == ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-mem = Memory("data/strata.db")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+mem = Memory(DB_PATH)
 
-
-def load_available_models():
-    instructions_dir = Path(__file__).parent / "instructions"
-    models = {}
-
-    if instructions_dir.exists():
-        for file in sorted(instructions_dir.glob("*.txt")):
-            model_name = file.stem
-            models[model_name] = {
-                "model_id": "gemini-1.5-flash",
-                "name": model_name.replace("_", " ").title(),
-            }
-
-    if not models:
-        models["default"] = {"model_id": "gemini-1.5-flash", "name": "Default"}
-
-    return models
-
-
-AVAILABLE_MODELS = load_available_models()
+AVAILABLE_MODELS = {
+    "default": {"model_id": GEMINI_MODEL, "name": "Default"},
+    "creative": {"model_id": GEMINI_MODEL, "name": "Creative"},
+    "analytical": {"model_id": GEMINI_MODEL, "name": "Analytical"},
+    "coding": {"model_id": GEMINI_MODEL, "name": "Coding"},
+}
 
 
 def get_default_instructions() -> str:
-    return "You are Strata, a helpful and intelligent AI assistant."
+    return (
+        "You are Strata, a capable general-purpose AI assistant. "
+        "Be accurate, useful, direct, and transparent about uncertainty. "
+        "Use the web-grounding tool when current or externally verifiable information "
+        "would improve the answer. Never claim to have searched when you did not. "
+        "Follow the user's request while keeping responses clear and practical."
+    )
 
 
-def load_instructions(model_type: str = "default") -> str:
-    instructions_file = Path(__file__).parent / "instructions" / f"{model_type}.txt"
-    if instructions_file.exists():
-        return instructions_file.read_text(encoding="utf-8").strip()
+def load_instructions(model_type: str) -> str:
+    safe_name = model_type if model_type in AVAILABLE_MODELS else "default"
+    path = INSTRUCTIONS_DIR / f"{safe_name}.txt"
+    if path.is_file():
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            return text
     return get_default_instructions()
 
 
+def make_contents(history, first_question: str, message: str):
+    contents = []
+    for role, text in history:
+        contents.append(
+            types.Content(
+                role="user" if role == "user" else "model",
+                parts=[types.Part.from_text(text=text)],
+            )
+        )
+
+    # The first question is deliberately carried into the model context. This
+    # gives Strata the persistent "first-question intelligence" requested by
+    # the project without exposing an internal system prompt to the browser.
+    contents.append(
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(
+                    text=(
+                        f"Conversation anchor (the user's first question): {first_question}\n\n"
+                        f"User's current message: {message}"
+                    )
+                )
+            ],
+        )
+    )
+    return contents
+
+
+def make_generation_config(system_prompt: str):
+    # Google Search grounding is supported by current Gemini models and lets
+    # the model retrieve current public web information itself. Older 1.5
+    # models use a legacy tool name, so don't send the modern tool to them.
+    tools = []
+    if not GEMINI_MODEL.startswith("gemini-1.5"):
+        tools.append(types.Tool(google_search=types.GoogleSearch()))
+
+    return types.GenerateContentConfig(
+        system_instruction=system_prompt,
+        temperature=0.7,
+        top_p=0.9,
+        top_k=40,
+        max_output_tokens=4096,
+        tools=tools or None,
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
-def home():
-    with open("app/static/index.html", "r", encoding="utf-8") as f:
-        return f.read()
+async def home():
+    return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
 
 
 @app.get("/api/models")
-def get_models():
-    return {"models": list(AVAILABLE_MODELS.keys())}
+async def get_models():
+    return {
+        "models": [
+            {"id": key, "name": value["name"], "model": value["model_id"]}
+            for key, value in AVAILABLE_MODELS.items()
+        ]
+    }
 
 
 @app.get("/health")
-def health():
+async def health():
     return {
         "status": "ok",
-        "model": "gemini-1.5-flash",
+        "model": GEMINI_MODEL,
         "api_key_configured": bool(GEMINI_API_KEY),
+        "web_grounding": not GEMINI_MODEL.startswith("gemini-1.5"),
     }
 
 
 @app.post("/api/chat")
 async def chat(req: Request):
-    if not GEMINI_API_KEY or not client:
+    if not GEMINI_API_KEY or client is None:
         return JSONResponse(
-            {"error": "GEMINI_API_KEY is not configured."},
-            status_code=500,
+            {"error": "GEMINI_API_KEY is not configured on the server."},
+            status_code=503,
         )
 
-    body = await req.json()
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON request."}, status_code=400)
+
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Request body must be a JSON object."}, status_code=400)
+
     message = str(body.get("message", "")).strip()
     model_type = str(body.get("model_type", "default")).strip() or "default"
+    if model_type not in AVAILABLE_MODELS:
+        model_type = "default"
 
     if not message:
         return JSONResponse({"error": "Message is required."}, status_code=400)
@@ -100,77 +171,68 @@ async def chat(req: Request):
     session_id = str(body.get("session_id") or uuid.uuid4())
     first_question = mem.first(session_id)
     if not first_question:
-        mem.start(session_id, message)
         first_question = message
+        mem.start(session_id, first_question)
 
+    # Read previous turns before inserting the current user message, so the
+    # current message is included exactly once in the generated contents.
     history = mem.history(session_id)
     mem.add(session_id, "user", message)
 
     async def stream_response():
-        thinking_stages = [
+        stages = (
             "Analyzing your question...",
-            "Thinking about the best approach...",
-            "Formulating response...",
-            "Finalizing answer...",
-        ]
+            "Checking relevant knowledge...",
+            "Formulating the answer...",
+        )
+        for stage in stages:
+            yield f"data: {json.dumps({'type': 'status', 'message': stage})}\\n\\n"
+            await asyncio.sleep(0.02)
 
         try:
-            contents = []
-            for role, text in history:
-                contents.append(
-                    types.Content(
-                        role="user" if role == "user" else "model",
-                        parts=[types.Part.from_text(text=text)],
-                    )
-                )
-
-            contents.append(
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(
-                            text=f"First question in conversation: {first_question}\n\nCurrent message: {message}"
-                        )
-                    ],
-                )
-            )
-
             system_prompt = load_instructions(model_type)
+            contents = make_contents(history, first_question, message)
+            config = make_generation_config(system_prompt)
+            model_name = AVAILABLE_MODELS[model_type]["model_id"]
 
-            config = types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.7,
-                top_p=0.9,
-                top_k=40,
-                max_output_tokens=2048,
-            )
-
-            for stage in thinking_stages:
-                yield "data: " + json.dumps({"type": "status", "message": stage}) + "\n\n"
-                await asyncio.sleep(0.05)
-
-            response = await client.aio.models.generate_content(
-                model="gemini-1.5-flash",
+            stream = await client.aio.models.generate_content_stream(
+                model=model_name,
                 contents=contents,
                 config=config,
             )
 
-            answer = (
-                response.text.strip()
-                if getattr(response, "text", None)
-                else "I apologize, but I couldn't generate a response. Please try again."
-            )
+            answer_parts = []
+            async for chunk in stream:
+                text = getattr(chunk, "text", None)
+                if not text:
+                    continue
+                answer_parts.append(text)
+                yield f"data: {json.dumps({'type': 'delta', 'message': text})}\\n\\n"
+
+            answer = "".join(answer_parts).strip()
+            if not answer:
+                answer = "I couldn't generate a response. Please try again."
+
             mem.add(session_id, "model", answer)
-
-            yield "data: " + json.dumps({"type": "answer", "message": answer}) + "\n\n"
+            yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\\n\\n"
+            yield f"data: {json.dumps({'type': 'done'})}\\n\\n"
         except Exception as exc:
-            error_message = f"An error occurred: {str(exc)[:120]}"
-            logger.error(f"Chat error: {exc}")
-            yield "data: " + json.dumps({"type": "error", "message": error_message}) + "\n\n"
+            logger.exception("Chat generation failed")
+            safe_error = str(exc).strip().replace("\\n", " ")[:240]
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Strata could not complete the request: {safe_error}'})}\\n\\n"
 
-    return StreamingResponse(stream_response(), media_type="text/event-stream")
+    return StreamingResponse(
+        stream_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host=HOST, port=PORT, reload=False)
