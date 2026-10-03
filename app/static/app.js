@@ -5,7 +5,9 @@ const messagesContainer = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 const sendButton = document.getElementById("sendButton");
 const chatForm = document.getElementById("chatForm");
-const contextButton = document.getElementById("contextButton");
+const attachmentButton = document.getElementById("attachmentButton");
+const fileInput = document.getElementById("fileInput");
+const attachmentPreview = document.getElementById("attachmentPreview");
 const contextPanel = document.getElementById("contextPanel");
 const contextInput = document.getElementById("contextInput");
 const contextClose = document.getElementById("contextClose");
@@ -24,6 +26,8 @@ const requestsDetail = document.getElementById("requestsDetail");
 const tokensPercent = document.getElementById("tokensPercent");
 const tokensBar = document.getElementById("tokensBar");
 const tokensDetail = document.getElementById("tokensDetail");
+let selectedAttachment = null;
+let selectedAttachmentData = "";
 
 const API_BASE =
   (window.STRATA_API_URL || document.documentElement.dataset.apiBase || "")
@@ -211,6 +215,32 @@ function addMessage(role, text, isStatus = false) {
   }
 
   group.appendChild(msg);
+
+  if (role === "assistant" && !isStatus) {
+    const ttsButton = document.createElement("button");
+    ttsButton.type = "button";
+    ttsButton.className = "tts-button";
+    ttsButton.setAttribute("aria-label", "Read response aloud");
+    ttsButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"></path><path d="M16 9.5c1.2 1.2 1.2 3.8 0 5"></path><path d="M18.5 7c2.6 2.7 2.6 7.3 0 10"></path></svg>';
+    ttsButton.addEventListener("click", () => {
+      if (!("speechSynthesis" in window)) return;
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+        ttsButton.classList.remove("speaking");
+        return;
+      }
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(msg.textContent || "");
+      utterance.rate = 0.98;
+      utterance.pitch = 1;
+      ttsButton.classList.add("speaking");
+      utterance.onend = () => ttsButton.classList.remove("speaking");
+      utterance.onerror = () => ttsButton.classList.remove("speaking");
+      speechSynthesis.speak(utterance);
+    });
+    group.appendChild(ttsButton);
+  }
+
   messagesContainer.appendChild(group);
   scrollToActive(group);
 
@@ -231,14 +261,17 @@ function removeLastStatus() {
 }
 
 function openCreditsPanel() {
-  creditsPanel?.classList.add("open");
+  if (!creditsPanel) return;
+  creditsPanel.hidden = false;
+  creditsPanel.classList.add("open");
   creditsPanel?.setAttribute("aria-hidden", "false");
   creditsButton?.setAttribute("aria-expanded", "true");
   loadCredits();
 }
 
 function closeCreditsPanel() {
-  creditsPanel?.classList.remove("open");
+  if (!creditsPanel) return;
+  creditsPanel.classList.remove("open");
   creditsPanel?.setAttribute("aria-hidden", "true");
   creditsButton?.setAttribute("aria-expanded", "false");
 }
@@ -368,14 +401,15 @@ async function sendMessage() {
 
   const message = messageInput.value.trim();
   const contextText = contextInput ? contextInput.value.trim() : "";
-  if (!message) return;
+  if (!message && !selectedAttachmentData) return;
 
   isLoading = true;
   messageInput.disabled = true;
   sendButton.disabled = true;
   messageInput.value = "";
 
-  const userMessage = addMessage("user", message);
+  const displayMessage = message || (selectedAttachment?.name ? "Attached: " + selectedAttachment.name : "Attachment");
+  const userMessage = addMessage("user", displayMessage);
   scrollToActive(userMessage.parentElement);
 
   let assistantMessage = null;
@@ -394,6 +428,9 @@ async function sendMessage() {
         session_id: sessionId,
         model_type: "strata",
         pasted_text: contextText,
+        image_data: selectedAttachmentData,
+        attachment_name: selectedAttachment?.name || "",
+        attachment_type: selectedAttachment?.type || "",
       }),
     });
 
@@ -488,6 +525,7 @@ async function sendMessage() {
     addMessage("assistant", "An error occurred while contacting Strata.");
   } finally {
     resetInput();
+    clearAttachment();
   }
 }
 
@@ -508,28 +546,98 @@ function toggleContextPanel() {
   }
 }
 
-contextButton.addEventListener("click", async () => {
-  if (!contextPanel.hidden) {
-    toggleContextPanel();
+function renderAttachmentPreview() {
+  if (!attachmentPreview) return;
+  attachmentPreview.innerHTML = "";
+  if (!selectedAttachment) {
+    attachmentPreview.hidden = true;
     return;
   }
 
-  contextPanel.hidden = false;
-  contextInput.focus();
+  attachmentPreview.hidden = false;
+  const item = document.createElement("div");
+  item.className = "attachment-item";
 
-  if (!contextInput.value && navigator.clipboard && navigator.clipboard.readText) {
-    try {
-      const clipboardText = await navigator.clipboard.readText();
-      if (clipboardText.trim()) {
-        contextInput.value = clipboardText;
-      }
-    } catch (_) {
-      // The user can paste normally when clipboard permission is unavailable.
-    }
+  if (selectedAttachment.type.startsWith("image/")) {
+    const img = document.createElement("img");
+    img.className = "attachment-thumb";
+    img.src = selectedAttachmentData;
+    img.alt = "";
+    item.appendChild(img);
+  } else {
+    const thumb = document.createElement("div");
+    thumb.className = "attachment-thumb";
+    thumb.textContent = "TXT";
+    thumb.style.display = "grid";
+    thumb.style.placeItems = "center";
+    thumb.style.fontSize = "10px";
+    item.appendChild(thumb);
   }
+
+  const name = document.createElement("span");
+  name.className = "attachment-name";
+  name.textContent = selectedAttachment.name;
+  item.appendChild(name);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "attachment-remove";
+  remove.setAttribute("aria-label", "Remove attachment");
+  remove.textContent = "×";
+  remove.addEventListener("click", clearAttachment);
+  item.appendChild(remove);
+
+  attachmentPreview.appendChild(item);
+}
+
+function clearAttachment() {
+  selectedAttachment = null;
+  selectedAttachmentData = "";
+  if (fileInput) fileInput.value = "";
+  if (attachmentPreview) {
+    attachmentPreview.hidden = true;
+    attachmentPreview.innerHTML = "";
+  }
+}
+
+attachmentButton?.addEventListener("click", () => fileInput?.click());
+
+fileInput?.addEventListener("change", async () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+
+  const maxBytes = 10 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    addMessage("assistant", "That file is too large. Please choose a file under 10 MB.");
+    fileInput.value = "";
+    return;
+  }
+
+  if (!(file.type.startsWith("image/") || file.type.startsWith("text/") ||
+        ["application/json", "text/csv", "application/pdf"].includes(file.type))) {
+    addMessage("assistant", "That file type is not supported yet.");
+    fileInput.value = "";
+    return;
+  }
+
+  selectedAttachment = file;
+
+  if (file.type.startsWith("image/") || file.type === "application/pdf") {
+    selectedAttachmentData = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  } else {
+    selectedAttachmentData = await file.text();
+  }
+
+  renderAttachmentPreview();
+  messageInput.focus();
 });
 
-contextClose.addEventListener("click", toggleContextPanel);
+contextClose?.addEventListener("click", toggleContextPanel);
 
 contextInput.addEventListener("input", () => {
   const count = contextInput.value.length;
