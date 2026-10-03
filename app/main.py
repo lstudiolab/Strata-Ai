@@ -184,6 +184,11 @@ async def chat(req: Request):
             async def on_tool(name: str, round_number: int):
                 labels = {
                     "get_pasted_text": "Reading the pasted text...",
+                    "calculator": "Calculating...",
+                    "get_current_time": "Checking the current time...",
+                    "format_json": "Formatting the JSON...",
+                    "browser_search": "Searching the web...",
+                    "code_interpreter": "Running code...",
                 }
                 await tool_events.put({
                     "message": labels.get(name, f"Using {name}...")
