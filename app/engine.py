@@ -1,26 +1,23 @@
-"""OpenRouter client helpers.
+"""Groq client helpers.
 
 The existing GEMINI_API_KEY environment variable is intentionally retained
-for deployment compatibility. Its value is treated as the OpenRouter API key.
+for deployment compatibility. Its value is treated as the Groq API key.
 """
 
 import json
-import time
 from typing import AsyncIterator
 
 import aiohttp
 
 from app.config import GEMINI_API_KEY
 
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-MODEL_CACHE_SECONDS = 300
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+DEFAULT_MODEL = "openai/gpt-oss-120b"
 
 
-class OpenRouterClient:
+class GroqClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self._cached_model: str | None = None
-        self._cached_at = 0.0
 
     @property
     def configured(self) -> bool:
@@ -30,55 +27,15 @@ class OpenRouterClient:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://strata-ai.onrender.com",
-            "X-Title": "Strata AI",
         }
 
     async def highest_priced_model(self) -> str:
-        now = time.monotonic()
-        if self._cached_model and now - self._cached_at < MODEL_CACHE_SECONDS:
-            return self._cached_model
+        """Return Strata's current flagship Groq production model.
 
-        timeout = aiohttp.ClientTimeout(total=20)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(
-                f"{OPENROUTER_BASE_URL}/models",
-                headers=self._headers(),
-            ) as response:
-                if response.status != 200:
-                    detail = await response.text()
-                    raise RuntimeError(
-                        f"OpenRouter model catalog returned HTTP {response.status}: {detail[:240]}"
-                    )
-                payload = await response.json()
-
-        candidates = []
-        for item in payload.get("data", []):
-            model_id = item.get("id")
-            pricing = item.get("pricing") or {}
-            try:
-                prompt_price = float(pricing.get("prompt") or 0)
-                completion_price = float(pricing.get("completion") or 0)
-            except (TypeError, ValueError):
-                continue
-
-            architecture = item.get("architecture") or {}
-            output_modalities = architecture.get("output_modalities") or []
-            if output_modalities and "text" not in output_modalities:
-                continue
-
-            if model_id and (prompt_price > 0 or completion_price > 0):
-                candidates.append(
-                    (prompt_price + completion_price, completion_price, prompt_price, model_id)
-                )
-
-        if not candidates:
-            raise RuntimeError("OpenRouter did not return a priced text-generation model.")
-
-        candidates.sort(reverse=True)
-        self._cached_model = candidates[0][3]
-        self._cached_at = now
-        return self._cached_model
+        Groq's model catalog does not expose OpenRouter-style per-model
+        pricing metadata, so Strata uses Groq's featured flagship model.
+        """
+        return DEFAULT_MODEL
 
     async def stream_chat(
         self,
@@ -87,7 +44,7 @@ class OpenRouterClient:
         messages: list[dict[str, str]],
     ) -> AsyncIterator[str]:
         payload = {
-            "model": model,
+            "model": model or DEFAULT_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 *messages,
@@ -101,14 +58,14 @@ class OpenRouterClient:
         timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=None)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
-                f"{OPENROUTER_BASE_URL}/chat/completions",
+                f"{GROQ_BASE_URL}/chat/completions",
                 headers=self._headers(),
                 json=payload,
             ) as response:
                 if response.status != 200:
                     detail = await response.text()
                     raise RuntimeError(
-                        f"OpenRouter returned HTTP {response.status}: {detail[:320]}"
+                        f"Groq returned HTTP {response.status}: {detail[:320]}"
                     )
 
                 async for raw_line in response.content:
@@ -134,4 +91,4 @@ class OpenRouterClient:
                         yield delta
 
 
-client = OpenRouterClient(GEMINI_API_KEY) if GEMINI_API_KEY else None
+client = GroqClient(GEMINI_API_KEY) if GEMINI_API_KEY else None
