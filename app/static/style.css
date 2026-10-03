@@ -872,3 +872,20 @@ button { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) {
   .token-meter-button { transition: none; }
 }
+
+.send-button.stop-generating {
+  position: relative;
+  background: #454549;
+  font-size: 0;
+}
+.send-button.stop-generating::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: currentColor;
+  transform: scale(.82);
+  transition: transform .18s cubic-bezier(.22,1,.36,1);
+}
+.send-button.stop-generating:hover { background: #2f2f33; }
+.send-button.stop-generating:active::before { transform: scale(.7); }
