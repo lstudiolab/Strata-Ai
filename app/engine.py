@@ -25,6 +25,37 @@ class GroqClient:
         }
 
     def _record_rate_limits(self, response) -> None:
+        def read_int(name):
+            try:
+                return int(response.headers.get(name))
+            except (TypeError, ValueError):
+                return None
+
+        self.rate_limits["requests"] = {
+            "remaining": read_int("x-ratelimit-remaining-requests"),
+            "limit": read_int("x-ratelimit-limit-requests"),
+            "reset": response.headers.get("x-ratelimit-reset-requests"),
+        }
+        self.rate_limits["tokens"] = {
+            "remaining": read_int("x-ratelimit-remaining-tokens"),
+            "limit": read_int("x-ratelimit-limit-tokens"),
+            "reset": response.headers.get("x-ratelimit-reset-tokens"),
+        }
+
+    def credit_status(self):
+        result = {"source": "Groq rate-limit headers"}
+        for key, bucket in self.rate_limits.items():
+            remaining = bucket["remaining"]
+            limit = bucket["limit"]
+            percent = None if remaining is None or not limit else round(max(0, min(100, remaining / limit * 100)), 1)
+            result[key] = {**bucket, "remaining_percent": percent}
+        return result
+        self.rate_limits = {
+            "requests": {"remaining": None, "limit": None, "reset": None},
+            "tokens": {"remaining": None, "limit": None, "reset": None},
+        }
+
+    def _record_rate_limits(self, response) -> None:
         def number(name: str):
             value = response.headers.get(name)
             try:
