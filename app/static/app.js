@@ -8,6 +8,16 @@ const chatForm = document.getElementById("chatForm");
 const attachmentButton = document.getElementById("attachmentButton");
 const fileInput = document.getElementById("fileInput");
 const attachmentPreview = document.getElementById("attachmentPreview");
+const settingsButton = document.getElementById("settingsButton");
+const settingsPanel = document.getElementById("settingsPanel");
+const settingsClose = document.getElementById("settingsClose");
+const conversationDrawer = document.getElementById("conversationDrawer");
+const conversationList = document.getElementById("conversationList");
+const conversationClose = document.getElementById("conversationClose");
+const drawerBackdrop = document.getElementById("drawerBackdrop");
+const newConversationButton = document.getElementById("newConversationButton");
+const memoryLimitText = document.getElementById("memoryLimitText");
+const MEMORY_LIMIT = 50;
 let selectedAttachment = null;
 let selectedAttachmentData = "";
 
@@ -296,7 +306,7 @@ async function sendMessage() {
   if (isLoading) return;
 
   const message = messageInput.value.trim();
-  const contextText = contextInput ? contextInput.value.trim() : "";
+  const contextText = "";
   if (!message && !selectedAttachmentData) return;
 
   isLoading = true;
