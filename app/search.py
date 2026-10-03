@@ -1,6 +1,6 @@
 import aiohttp
 import logging
-from typing import Optional
+from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ class SearchEngine:
     GOOGLE_SEARCH_API = "https://www.google.com/search"
 
     @staticmethod
-    async def search(query: str, limit: int = 5) -> list[dict]:
+    async def search(query: str, limit: int = 5) -> List[Dict]:
         """
         Search the web using Google search.
         Returns list of results with title, link, and snippet.
@@ -44,7 +44,7 @@ class SearchEngine:
         return []
 
     @staticmethod
-    def _parse_google_results(html: str) -> list[dict]:
+    def _parse_google_results(html: str) -> List[Dict]:
         """Parse Google search HTML results."""
         results = []
         try:
