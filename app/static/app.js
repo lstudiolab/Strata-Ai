@@ -128,7 +128,12 @@ async function sendMessage() {
         const payload = JSON.parse(raw);
 
         if (payload.type === "status") {
-          updateLastStatus(payload.message);
+          const existingStatus = messagesContainer.querySelector(".message.status");
+          if (existingStatus) {
+            updateLastStatus(payload.message);
+          } else {
+            addMessage("assistant", payload.message || "Thinking...", true);
+          }
         } else if (payload.type === "delta") {
           removeLastStatus();
           fullAnswer += payload.message || "";
