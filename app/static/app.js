@@ -516,7 +516,6 @@ function startNewConversation() {
   localStorage.setItem("strata_session_id", sessionId);
   messagesContainer.innerHTML = "";
   clearAttachment();
-  addMessage("assistant", "Hi, I'm Strata. How can I help?");
   closeConversationDrawer();
 }
 
@@ -562,7 +561,6 @@ async function loadConversation(id) {
     for (const item of data.messages || []) {
       addMessage(item.role === "user" ? "user" : "assistant", item.content || "");
     }
-    if (!messagesContainer.children.length) addMessage("assistant", "Hi, I'm Strata. How can I help?");
     closeConversationDrawer();
   } catch (_) {
     addMessage("assistant", "I couldn't load that conversation.");
@@ -686,7 +684,7 @@ drawerBackdrop?.addEventListener("click", closeConversationDrawer);
 newConversationButton?.addEventListener("click", startNewConversation);
 
 window.addEventListener("load", () => {
-  if (!messagesContainer.children.length) addMessage("assistant", "Hi, I'm Strata. How can I help?");
-  if (memoryLimitText) memoryLimitText.textContent = MEMORY_LIMIT + " messages per conversation";
+  // Do not inject a canned assistant response. The first assistant message
+  // shown in a conversation must come from the API.
 });
 
