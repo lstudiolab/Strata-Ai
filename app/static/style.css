@@ -758,3 +758,80 @@ button { -webkit-tap-highlight-color: transparent; }
     animation: none !important;
   }
 }
+
+
+/* Refined interaction motion: movement follows the real request lifecycle. */
+@keyframes strataUserSend {
+  0% { opacity: 0; transform: translate3d(10px, 8px, 0) scale(.965); }
+  55% { opacity: 1; transform: translate3d(-1px, 0, 0) scale(1.008); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes strataGenerating {
+  0%, 100% { opacity: .46; transform: translateY(0); }
+  50% { opacity: .82; transform: translateY(-1px); }
+}
+
+@keyframes strataTypingPulse {
+  0%, 100% { opacity: .18; transform: scale(.72); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes strataShimmer {
+  0% { background-position: 120% 0; opacity: 0; }
+  35% { opacity: 1; }
+  70% { opacity: 0; }
+  100% { background-position: -120% 0; opacity: 0; }
+}
+
+.message-sent .message.user {
+  animation: strataUserSend .42s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.message-group.generating .message.status {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 86px;
+  padding-right: 26px;
+  animation: strataGenerating 1.45s ease-in-out infinite;
+}
+
+.message-group.generating .message.status::after {
+  content: "•••";
+  position: absolute;
+  right: 0;
+  bottom: .05em;
+  width: 22px;
+  overflow: hidden;
+  color: currentColor;
+  letter-spacing: 2px;
+  animation: strataTypingPulse 1.15s ease-in-out infinite;
+}
+
+.message-group.generating .message.status::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  top: -5px;
+  bottom: -5px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,.045), transparent);
+  background-size: 220% 100%;
+  animation: strataShimmer 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.message-group.assistant:not(.generating) .message {
+  transition: opacity .24s ease, transform .24s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-sent .message.user,
+  .message-group.generating .message.status,
+  .message-group.generating .message.status::after,
+  .message-group.generating .message.status::before {
+    animation: none !important;
+  }
+}
