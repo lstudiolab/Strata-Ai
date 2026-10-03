@@ -329,6 +329,9 @@ async function stopGeneration() {
   sendButton.setAttribute("aria-label", "Send message");
   sendButton.title = "Send message";
   removeLastStatus();
+  document.querySelectorAll(".message-group.generating").forEach((group) => {
+    group.classList.remove("generating");
+  });
   messageInput.focus();
 }
 
@@ -357,10 +360,11 @@ async function sendMessage() {
   let assistantMessage = null;
   let assistantGroup = null;
   let fullAnswer = "";
+  addMessage("assistant", "Thinking", true);
+  const abortController = new AbortController();
+  window.__strataAbortController = abortController;
 
   try {
-    const abortController = new AbortController();
-    window.__strataAbortController = abortController;
     const response = await fetch(API_BASE + "/api/chat", {
       method: "POST",
       headers: {
@@ -451,6 +455,7 @@ async function sendMessage() {
 
           const completedText = finalAnswer || "I couldn't generate a response. Please try again.";
           renderAssistantMessage(assistantMessage, completedText);
+          assistantGroup.classList.remove("generating");
           addResponseActions(assistantGroup, assistantMessage);
           assistantGroup.classList.add("message-complete");
 
@@ -511,6 +516,9 @@ async function sendMessage() {
     } else {
       console.error("Chat request failed:", error);
       removeLastStatus();
+      document.querySelectorAll(".message-group.generating").forEach((group) => {
+        group.classList.remove("generating");
+      });
       addMessage("assistant", "An error occurred while contacting Strata.");
     }
   } finally {
