@@ -53,6 +53,38 @@ def load_instructions() -> str:
     return get_default_instructions()
 
 
+def normalize_user_prompt(text: str) -> str:
+    """Deterministically clean a user's prompt without making another model/API call.
+
+    This is intentionally conservative: it removes transport noise and common
+    speech-to-text artifacts, but never invents requirements or changes meaning.
+    The cleaned form is what the model receives, saving tokens without adding a
+    second inference request.
+    """
+    value = " ".join(str(text or "").replace("\u00a0", " ").split())
+    if not value:
+        return ""
+
+    replacements = {
+        " can you please ": " ",
+        " could you please ": " ",
+        " please can you ": " ",
+        " pls ": " ",
+        " plz ": " ",
+    }
+    padded = " " + value + " "
+    for old, new in replacements.items():
+        padded = padded.replace(old, new)
+    value = " ".join(padded.split()).strip()
+
+    # Common speech-to-text punctuation artifacts.
+    value = value.replace(" ,", ",").replace(" .", ".")
+    value = value.replace(" ?", "?").replace(" !", "!")
+    value = value.replace(" :", ":").replace(" ;", ";")
+
+    return value
+
+
 def make_messages(history, first_question: str, message: str, memory_summary: str = ""):
     messages = []
     if memory_summary:
@@ -70,12 +102,11 @@ def make_messages(history, first_question: str, message: str, memory_summary: st
             "content": text,
         })
 
+    # Keep the actual user request compact. Prompt cleanup happens locally and
+    # does not consume an additional model request.
     messages.append({
         "role": "user",
-        "content": (
-            f"Conversation anchor (the user's first question): {first_question}\n\n"
-            f"User's current message: {message}"
-        ),
+        "content": message,
     })
     return messages
 
@@ -161,7 +192,8 @@ async def chat(req: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "Request body must be a JSON object."}, status_code=400)
 
-    message = str(body.get("message", "")).strip()
+    original_message = str(body.get("message", "")).strip()
+    message = normalize_user_prompt(original_message)
     pasted_text = str(body.get("pasted_text", "") or "").strip()
     image_data = str(body.get("image_data", "") or "").strip()
     attachment_type = str(body.get("attachment_type", "") or "").strip()
@@ -182,11 +214,13 @@ async def chat(req: Request):
     session_id = str(body.get("session_id") or uuid.uuid4())
     first_question = mem.first(session_id)
     if not first_question:
-        first_question = message or str(body.get("attachment_name", "Image attachment"))
+        first_question = original_message or str(body.get("attachment_name", "Image attachment"))
         mem.start(session_id, first_question)
 
     history = mem.history(session_id, limit=32)
-    mem.add(session_id, "user", message)
+    # Store the original wording for conversation history; only the model-facing
+    # copy is normalized so the user's actual message is never lost.
+    mem.add(session_id, "user", original_message)
 
     async def stream_response():
         yield f"data: {json.dumps({'type': 'status', 'message': 'Thinking...'})}\n\n"
@@ -199,6 +233,8 @@ async def chat(req: Request):
             # Message understanding is handled inside the main Strata request.
             # Do not spend a second API request on a separate correction pass; doing
             # so can exhaust request-rate limits and cause later messages to fail.
+            # The system has already cleaned the prompt locally. There is no
+            # second AI correction call and therefore no extra token/request cost.
             corrected_message = message
 
             if pasted_text:
@@ -254,7 +290,7 @@ async def chat(req: Request):
 
             # mem.add() stores the current user turn before generation. Do not add
             # that same turn a second time through the conversation anchor.
-            if history and history[-1][0] == "user" and history[-1][1] == message:
+            if history and history[-1][0] == "user" and history[-1][1] == original_message:
                 history = history[:-1]
 
             # Keep recent context generous enough for long messages while still
