@@ -8,16 +8,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from google.genai import types
 
-from app.config import (
-    CORS_ORIGINS,
-    DB_PATH,
-    GEMINI_API_KEY,
-    GEMINI_MODEL,
-    HOST,
-    PORT,
-)
+from app.config import CORS_ORIGINS, DB_PATH, GEMINI_API_KEY, HOST, PORT
 from app.engine import client
 from app.memory import Memory
 
@@ -30,9 +22,6 @@ INSTRUCTIONS_DIR = BASE_DIR / "instructions"
 
 app = FastAPI(title="Strata AI", version="1.0.0")
 
-# No browser credentials are used by Strata, so wildcard CORS is safe for the
-# default deployment. Specific origins can be supplied through CORS_ORIGINS.
-allow_all_origins = CORS_ORIGINS == ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -45,10 +34,10 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 mem = Memory(DB_PATH)
 
 AVAILABLE_MODELS = {
-    "strata": {"model_id": GEMINI_MODEL, "name": "Strata 1.0"},
-    "saber": {"model_id": GEMINI_MODEL, "name": "Saber 1.0"},
-    "zen": {"model_id": GEMINI_MODEL, "name": "Zen 1.0"},
-    "marcus": {"model_id": GEMINI_MODEL, "name": "Marcus 1.0"},
+    "strata": {"name": "Strata 1.0"},
+    "saber": {"name": "Saber 1.0"},
+    "zen": {"name": "Zen 1.0"},
+    "marcus": {"name": "Marcus 1.0"},
 }
 
 
@@ -56,9 +45,9 @@ def get_default_instructions() -> str:
     return (
         "You are Strata, a capable general-purpose AI assistant. "
         "Be accurate, useful, direct, and transparent about uncertainty. "
-        "Use the web-grounding tool when current or externally verifiable information "
-        "would improve the answer. Never claim to have searched when you did not. "
-        "Follow the user's request while keeping responses clear and practical."
+        "Use available information carefully and never claim to have searched "
+        "the web unless a web tool was actually used. Follow the user's request "
+        "while keeping responses clear and practical."
     )
 
 
@@ -72,51 +61,22 @@ def load_instructions(model_type: str) -> str:
     return get_default_instructions()
 
 
-def make_contents(history, first_question: str, message: str):
-    contents = []
+def make_messages(history, first_question: str, message: str):
+    messages = []
     for role, text in history:
-        contents.append(
-            types.Content(
-                role="user" if role == "user" else "model",
-                parts=[types.Part.from_text(text=text)],
-            )
-        )
+        messages.append({
+            "role": "user" if role == "user" else "assistant",
+            "content": text,
+        })
 
-    # The first question is deliberately carried into the model context. This
-    # gives Strata the persistent "first-question intelligence" requested by
-    # the project without exposing an internal system prompt to the browser.
-    contents.append(
-        types.Content(
-            role="user",
-            parts=[
-                types.Part.from_text(
-                    text=(
-                        f"Conversation anchor (the user's first question): {first_question}\n\n"
-                        f"User's current message: {message}"
-                    )
-                )
-            ],
-        )
-    )
-    return contents
-
-
-def make_generation_config(system_prompt: str):
-    # Google Search grounding is supported by current Gemini models and lets
-    # the model retrieve current public web information itself. Older 1.5
-    # models use a legacy tool name, so don't send the modern tool to them.
-    tools = []
-    if not GEMINI_MODEL.startswith("gemini-1.5"):
-        tools.append(types.Tool(google_search=types.GoogleSearch()))
-
-    return types.GenerateContentConfig(
-        system_instruction=system_prompt,
-        temperature=0.7,
-        top_p=0.9,
-        top_k=40,
-        max_output_tokens=4096,
-        tools=tools or None,
-    )
+    messages.append({
+        "role": "user",
+        "content": (
+            f"Conversation anchor (the user's first question): {first_question}\n\n"
+            f"User's current message: {message}"
+        ),
+    })
+    return messages
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -126,9 +86,20 @@ async def home():
 
 @app.get("/api/models")
 async def get_models():
+    model_name = None
+    if client is not None:
+        try:
+            model_name = await client.highest_priced_model()
+        except Exception:
+            logger.exception("Unable to resolve the current highest-priced OpenRouter model")
+
     return {
         "models": [
-            {"id": key, "name": value["name"], "model": value["model_id"]}
+            {
+                "id": key,
+                "name": value["name"],
+                "model": model_name or "openrouter/auto",
+            }
             for key, value in AVAILABLE_MODELS.items()
         ]
     }
@@ -136,11 +107,18 @@ async def get_models():
 
 @app.get("/health")
 async def health():
+    resolved_model = None
+    if client is not None:
+        try:
+            resolved_model = await client.highest_priced_model()
+        except Exception:
+            logger.exception("OpenRouter model discovery failed during health check")
+
     return {
         "status": "ok",
-        "model": GEMINI_MODEL,
+        "provider": "openrouter",
+        "model": resolved_model,
         "api_key_configured": bool(GEMINI_API_KEY),
-        "web_grounding": not GEMINI_MODEL.startswith("gemini-1.5"),
     }
 
 
@@ -148,7 +126,7 @@ async def health():
 async def chat(req: Request):
     if not GEMINI_API_KEY or client is None:
         return JSONResponse(
-            {"error": "GEMINI_API_KEY is not configured on the server."},
+            {"error": "The OpenRouter API key is not configured on the server."},
             status_code=503,
         )
 
@@ -161,7 +139,7 @@ async def chat(req: Request):
         return JSONResponse({"error": "Request body must be a JSON object."}, status_code=400)
 
     message = str(body.get("message", "")).strip()
-    model_type = str(body.get("model_type", "strata")).strip() or "default"
+    model_type = str(body.get("model_type", "strata")).strip() or "strata"
     if model_type not in AVAILABLE_MODELS:
         model_type = "strata"
 
@@ -174,8 +152,6 @@ async def chat(req: Request):
         first_question = message
         mem.start(session_id, first_question)
 
-    # Read previous turns before inserting the current user message, so the
-    # current message is included exactly once in the generated contents.
     history = mem.history(session_id)
     mem.add(session_id, "user", message)
 
@@ -190,22 +166,12 @@ async def chat(req: Request):
             await asyncio.sleep(0.02)
 
         try:
+            model_name = await client.highest_priced_model()
             system_prompt = load_instructions(model_type)
-            contents = make_contents(history, first_question, message)
-            config = make_generation_config(system_prompt)
-            model_name = AVAILABLE_MODELS[model_type]["model_id"]
-
-            stream = await client.aio.models.generate_content_stream(
-                model=model_name,
-                contents=contents,
-                config=config,
-            )
+            messages = make_messages(history, first_question, message)
 
             answer_parts = []
-            async for chunk in stream:
-                text = getattr(chunk, "text", None)
-                if not text:
-                    continue
+            async for text in client.stream_chat(model_name, system_prompt, messages):
                 answer_parts.append(text)
                 yield f"data: {json.dumps({'type': 'delta', 'message': text})}\n\n"
 
@@ -234,5 +200,4 @@ async def chat(req: Request):
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host=HOST, port=PORT, reload=False)
