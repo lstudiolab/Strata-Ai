@@ -32,6 +32,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 mem = Memory(DB_PATH)
+MEMORY_LIMIT = 50
 
 
 def get_default_instructions() -> str:
@@ -177,6 +178,17 @@ async def chat(req: Request):
         mem.start(session_id, first_question)
 
     history = mem.history(session_id)
+    if mem.count_messages(session_id) >= MEMORY_LIMIT:
+        return JSONResponse(
+            {
+                "error": "This conversation has reached Strata’s memory limit of "
+                + str(MEMORY_LIMIT)
+                + " messages. Start a new conversation to continue.",
+                "memory_limit": MEMORY_LIMIT,
+            },
+            status_code=409,
+        )
+
     mem.add(session_id, "user", message)
 
     async def stream_response():
