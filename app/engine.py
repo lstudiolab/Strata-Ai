@@ -50,7 +50,10 @@ class GroqClient:
             *messages,
         ]
 
-        tools = []
+        tools = [
+            {"type": "browser_search"},
+            {"type": "code_interpreter"},
+        ]
         if pasted_text.strip():
             tools.append({
                 "type": "function",
