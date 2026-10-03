@@ -15,19 +15,22 @@ function generateSessionId() {
 }
 
 // Add message to chat
-function addMessage(role, text, isStatus = false) {
+function addMessage(role, text, isStatus) {
+  if (isStatus === undefined) isStatus = false;
+  
   const messageGroup = document.createElement("div");
-  messageGroup.className = `message-group ${role}`;
+  messageGroup.className = "message-group " + role;
 
   const message = document.createElement("div");
-  message.className = `message ${role}`;
+  message.className = "message " + role;
   if (isStatus) message.classList.add("status");
 
   if (isStatus) {
     // Extract emoji from status message if present
-    const emojiMatch = text.match(/^([🔍🌐📚⚙️✅])\s+(.*)/);
+    const emojiPattern = /^([\ud83d\udd0d\ud83c\udf10\ud83d\udcda\u2699\ufe0f\u2705])\s+(.*)/;
+    const emojiMatch = text.match(emojiPattern);
     if (emojiMatch) {
-      message.innerHTML = `<span class="status-indicator">${emojiMatch[1]}</span>${escapeHtml(emojiMatch[2])}`;
+      message.innerHTML = '<span class="status-indicator">' + emojiMatch[1] + '</span>' + escapeHtml(emojiMatch[2]);
     } else {
       message.textContent = text;
     }
@@ -39,7 +42,7 @@ function addMessage(role, text, isStatus = false) {
   messagesContainer.appendChild(messageGroup);
 
   // Scroll to bottom
-  setTimeout(() => {
+  setTimeout(function() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }, 0);
 }
@@ -55,7 +58,7 @@ function addErrorMessage(text) {
   messageGroup.appendChild(message);
   messagesContainer.appendChild(messageGroup);
 
-  setTimeout(() => {
+  setTimeout(function() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }, 0);
 }
@@ -68,7 +71,9 @@ function escapeHtml(text) {
     '"': "&quot;",
     "'": "&#039;"
   };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
+  return text.replace(/[&<>"']/g, function(m) {
+    return map[m];
+  });
 }
 
 async function sendMessage() {
@@ -90,7 +95,7 @@ async function sendMessage() {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, session_id: sessionId })
+      body: JSON.stringify({ message: message, session_id: sessionId })
     });
 
     if (!response.ok || !response.body) {
@@ -106,14 +111,18 @@ async function sendMessage() {
     let buffer = "";
 
     while (true) {
-      const { value, done } = await reader.read();
+      const result = await reader.read();
+      const value = result.value;
+      const done = result.done;
+      
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
       const events = buffer.split("\n\n");
       buffer = events.pop() || "";
 
-      for (const event of events) {
+      for (let i = 0; i < events.length; i++) {
+        const event = events[i];
         if (!event.startsWith("data: ")) continue;
         const raw = event.replace(/^data:\s*/, "").trim();
         if (!raw) continue;
@@ -152,7 +161,7 @@ async function sendMessage() {
 
 // Event listeners
 sendButton.addEventListener("click", sendMessage);
-messageInput.addEventListener("keydown", (e) => {
+messageInput.addEventListener("keydown", function(e) {
   if (e.key === "Enter" && !e.shiftKey && !isLoading) {
     e.preventDefault();
     sendMessage();
@@ -163,6 +172,6 @@ messageInput.addEventListener("keydown", (e) => {
 messageInput.focus();
 
 // Show welcome message
-window.addEventListener("load", () => {
-  addMessage("assistant", "👋 Hi! I'm Strata AI. I can help you with coding, research, writing, analysis, and much more. What can I help you with today?");
+window.addEventListener("load", function() {
+  addMessage("assistant", "Hi! I'm Strata AI. I can help you with coding, research, writing, analysis, and much more. What can I help you with today?");
 });
