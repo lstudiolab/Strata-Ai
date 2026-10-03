@@ -12,7 +12,13 @@
       <header class="header">
         <div class="header-content">
           <h1>Strata</h1>
-          <button id="settingsButton" class="glass-icon-button" type="button" aria-label="AI settings">•••</button>
+          <div class="header-actions">
+            <button id="tokenMeterButton" class="token-meter-button" type="button" aria-label="Token usage">
+              <span class="token-meter-ring" aria-hidden="true"><span id="tokenMeterFill"></span></span>
+              <span id="tokenMeterPercent">—</span>
+            </button>
+            <button id="settingsButton" class="glass-icon-button" type="button" aria-label="AI settings">•••</button>
+          </div>
         </div>
       </header>
 
