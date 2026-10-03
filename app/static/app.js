@@ -5,6 +5,10 @@ const messagesContainer = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 const sendButton = document.getElementById("sendButton");
 const chatForm = document.getElementById("chatForm");
+const contextButton = document.getElementById("contextButton");
+const contextPanel = document.getElementById("contextPanel");
+const contextInput = document.getElementById("contextInput");
+const contextClose = document.getElementById("contextClose");
 
 const API_BASE =
   (window.STRATA_API_URL || document.documentElement.dataset.apiBase || "")
@@ -59,6 +63,7 @@ async function sendMessage() {
   if (isLoading) return;
 
   const message = messageInput.value.trim();
+  const contextText = contextInput ? contextInput.value.trim() : "";
   if (!message) return;
 
   isLoading = true;
@@ -84,6 +89,7 @@ async function sendMessage() {
         message,
         session_id: sessionId,
         model_type: "strata",
+        pasted_text: contextText,
       }),
     });
 
@@ -187,6 +193,47 @@ function resetInput() {
   sendButton.disabled = false;
   messageInput.focus();
 }
+
+function toggleContextPanel() {
+  if (!contextPanel) return;
+  contextPanel.hidden = !contextPanel.hidden;
+  if (!contextPanel.hidden) {
+    contextInput.focus();
+  } else {
+    messageInput.focus();
+  }
+}
+
+contextButton.addEventListener("click", async () => {
+  if (!contextPanel.hidden) {
+    toggleContextPanel();
+    return;
+  }
+
+  contextPanel.hidden = false;
+  contextInput.focus();
+
+  if (!contextInput.value && navigator.clipboard && navigator.clipboard.readText) {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      if (clipboardText.trim()) {
+        contextInput.value = clipboardText;
+      }
+    } catch (_) {
+      // The user can paste normally when clipboard permission is unavailable.
+    }
+  }
+});
+
+contextClose.addEventListener("click", toggleContextPanel);
+
+contextInput.addEventListener("input", () => {
+  const count = contextInput.value.length;
+  contextButton.setAttribute(
+    "aria-label",
+    count ? "Text attached" : "Add text"
+  );
+});
 
 chatForm.addEventListener("submit", (event) => {
   event.preventDefault();
