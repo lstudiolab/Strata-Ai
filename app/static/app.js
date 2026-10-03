@@ -186,7 +186,7 @@ function attachCopyButtons(root) {
   });
 }
 
-function addMessage(role, text, isStatus = false) {
+function addMessage(role, text, isStatus = false, attachment = null) {
   const group = document.createElement("div");
   group.className = "message-group " + role;
 
@@ -196,6 +196,16 @@ function addMessage(role, text, isStatus = false) {
   if (role !== "assistant" || isStatus) {
     msg.textContent = text || "";
   }
+
+  if (role === "user" && attachment?.data?.startsWith("data:image/")) {
+    const image = document.createElement("img");
+    image.className = "message-attachment-image";
+    image.src = attachment.data;
+    image.alt = attachment.name || "Attached image";
+    image.loading = "lazy";
+    msg.appendChild(image);
+  }
+
   group.appendChild(msg);
 
   if (role === "assistant" && !isStatus) {
@@ -297,8 +307,11 @@ async function sendMessage() {
   sendButton.disabled = true;
   messageInput.value = "";
 
-  const displayMessage = message || (selectedAttachment?.name ? "Attached: " + selectedAttachment.name : "Attachment");
-  const userMessage = addMessage("user", displayMessage);
+  const displayMessage = message || (selectedAttachment?.name ? "Attached: " + selectedAttachment.name : "Image");
+  const sentAttachment = selectedAttachment && selectedAttachment.type.startsWith("image/")
+    ? { data: selectedAttachmentData, name: selectedAttachment.name }
+    : null;
+  const userMessage = addMessage("user", displayMessage, false, sentAttachment);
   scrollToActive(userMessage.parentElement);
 
   let assistantMessage = null;
@@ -422,7 +435,6 @@ function resetInput() {
   isLoading = false;
   messageInput.disabled = false;
   sendButton.disabled = false;
-  messageInput.focus();
 }
 
 function toggleContextPanel() {
@@ -523,7 +535,6 @@ fileInput?.addEventListener("change", async () => {
   }
 
   renderAttachmentPreview();
-  messageInput.focus();
 });
 
 contextClose?.addEventListener("click", toggleContextPanel);
