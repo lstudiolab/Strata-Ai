@@ -328,10 +328,10 @@ async def chat(req: Request):
             # Keep the clean streaming feel in the UI after agent/tool work.
             # Chunking is only for transport/UI responsiveness. The complete answer
             # is always sent again in the authoritative "answer" event below.
-            chunk_size = 256
+            # Forward the model result immediately; there is intentionally no artificial response delay.
+            chunk_size = 512
             for index in range(0, len(answer), chunk_size):
                 yield f"data: {json.dumps({'type': 'delta', 'message': answer[index:index + chunk_size]})}\n\n"
-                await asyncio.sleep(0.005)
 
             mem.add(session_id, "model", answer)
             yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\n\n"
