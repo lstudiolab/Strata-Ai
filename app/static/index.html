@@ -11,9 +11,26 @@
     <div class="app-container">
       <header class="header">
         <div class="header-content">
+          <button id="historyButton" class="history-button" type="button" aria-label="Past conversations" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
           <h1>Strata</h1>
+          <span class="header-spacer" aria-hidden="true"></span>
         </div>
       </header>
+
+      <aside id="conversationDrawer" class="conversation-drawer" aria-hidden="true">
+        <div class="drawer-header">
+          <div>
+            <h2>Conversations</h2>
+            <p>Past conversations</p>
+          </div>
+          <button id="historyClose" class="history-close" type="button" aria-label="Close conversations">×</button>
+        </div>
+        <button id="newConversationButton" class="new-conversation-button" type="button">New conversation</button>
+        <div id="conversationList" class="conversation-list"></div>
+      </aside>
+      <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
 
       <main class="chat-container" aria-label="Strata conversation">
         <div id="messages" class="messages" aria-live="polite"></div>
