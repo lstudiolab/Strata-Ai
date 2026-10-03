@@ -12,29 +12,8 @@
       <header class="header">
         <div class="header-content">
           <h1>Strata</h1>
-          <button id="creditsButton" class="credits-button" type="button" aria-label="Show usage" aria-expanded="false">
-            <span id="creditsPercent" class="credits-percent">--</span>
-          </button>
         </div>
       </header>
-
-      <aside id="creditsPanel" class="credits-panel" aria-hidden="true">
-        <div class="credits-header">
-          <div><h2>Usage</h2><p>Live Groq quota</p></div>
-          <button id="creditsClose" class="credits-close" type="button" aria-label="Close usage">×</button>
-        </div>
-        <div class="credit-meter">
-          <div class="credit-meter-top"><span>Requests remaining</span><strong id="requestsPercent">—</strong></div>
-          <div class="credit-track"><span id="requestsBar"></span></div>
-          <p id="requestsDetail">Send a message to measure your quota.</p>
-        </div>
-        <div class="credit-meter">
-          <div class="credit-meter-top"><span>Tokens remaining</span><strong id="tokensPercent">—</strong></div>
-          <div class="credit-track"><span id="tokensBar"></span></div>
-          <p id="tokensDetail">Measured from Groq's live response headers.</p>
-        </div>
-        <p class="credits-note">This measures API rate-limit capacity, not a dollar balance.</p>
-      </aside>
 
       <main class="chat-container" aria-label="Strata conversation">
         <div id="messages" class="messages" aria-live="polite"></div>
