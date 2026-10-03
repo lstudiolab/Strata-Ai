@@ -96,6 +96,13 @@ async def get_models():
     }
 
 
+@app.get("/api/credits")
+async def get_credits():
+    if client is None:
+        return {"available": False, "message": "Groq is not configured."}
+    return {"available": True, **client.credit_status()}
+
+
 @app.get("/api/conversations")
 async def get_conversations():
     return {"conversations": mem.list_sessions()}
