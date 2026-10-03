@@ -1,12 +1,10 @@
 let isLoading = false;
 let sessionId = localStorage.getItem("strata_session_id");
-let currentModel = "strata";
 
 const messagesContainer = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 const sendButton = document.getElementById("sendButton");
 const chatForm = document.getElementById("chatForm");
-const modelSelect = document.getElementById("modelSelect");
 
 const API_BASE =
   (window.STRATA_API_URL || document.documentElement.dataset.apiBase || "")
@@ -28,15 +26,6 @@ function scrollToActive(group, behavior = "smooth") {
   });
 }
 
-function scrollToBottom(behavior = "smooth") {
-  requestAnimationFrame(() => {
-    messagesContainer.scrollTo({
-      top: messagesContainer.scrollHeight,
-      behavior,
-    });
-  });
-}
-
 function addMessage(role, text, isStatus = false) {
   const group = document.createElement("div");
   group.className = "message-group " + role;
@@ -48,9 +37,6 @@ function addMessage(role, text, isStatus = false) {
 
   group.appendChild(msg);
   messagesContainer.appendChild(group);
-
-  // New conversations are anchored to the current exchange rather than
-  // leaving older messages in the main reading position.
   scrollToActive(group);
 
   return msg;
@@ -66,34 +52,7 @@ function updateLastStatus(text) {
 function removeLastStatus() {
   const statuses = messagesContainer.querySelectorAll(".message.status");
   if (!statuses.length) return;
-  const statusMessage = statuses[statuses.length - 1];
-  statusMessage.parentElement.remove();
-}
-
-async function loadModels() {
-  try {
-    const response = await fetch(API_BASE + "/api/models");
-    if (!response.ok) return;
-
-    const data = await response.json();
-    if (!Array.isArray(data.models)) return;
-
-    modelSelect.replaceChildren();
-    for (const model of data.models) {
-      const option = document.createElement("option");
-      option.value = model.id;
-      option.textContent = model.name;
-      modelSelect.appendChild(option);
-    }
-
-    modelSelect.value = currentModel;
-    if (modelSelect.value !== currentModel && modelSelect.options.length) {
-      currentModel = modelSelect.options[0].value;
-      modelSelect.value = currentModel;
-    }
-  } catch (error) {
-    console.warn("Could not load models:", error);
-  }
+  statuses[statuses.length - 1].parentElement.remove();
 }
 
 async function sendMessage() {
@@ -108,9 +67,6 @@ async function sendMessage() {
   messageInput.value = "";
 
   const userMessage = addMessage("user", message);
-
-  // Put the active exchange at the reading position. Older messages remain
-  // in the conversation history, but are naturally pushed above the viewport.
   scrollToActive(userMessage.parentElement);
 
   let assistantMessage = null;
@@ -120,11 +76,14 @@ async function sendMessage() {
   try {
     const response = await fetch(API_BASE + "/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
       body: JSON.stringify({
         message,
         session_id: sessionId,
-        model_type: currentModel,
+        model_type: "strata",
       }),
     });
 
@@ -133,10 +92,8 @@ async function sendMessage() {
       try {
         const errorData = await response.json();
         if (errorData.error) errorText = errorData.error;
-      } catch (_) {
-        // Keep the generic error when the server did not return JSON.
-      }
-      addMessage("assistant", errorText, false);
+      } catch (_) {}
+      addMessage("assistant", errorText);
       return;
     }
 
@@ -179,9 +136,6 @@ async function sendMessage() {
           }
 
           assistantMessage.textContent = fullAnswer;
-
-          // Keep the live answer in view while it streams without snapping
-          // the whole conversation back to the very bottom.
           scrollToActive(assistantGroup, "auto");
         } else if (payload.type === "answer") {
           removeLastStatus();
@@ -246,11 +200,6 @@ messageInput.addEventListener("keydown", (event) => {
   }
 });
 
-modelSelect.addEventListener("change", (event) => {
-  currentModel = event.target.value;
-});
-
-window.addEventListener("load", async () => {
-  await loadModels();
+window.addEventListener("load", () => {
   addMessage("assistant", "Hi! I'm Strata AI. How can I help you today?");
 });
