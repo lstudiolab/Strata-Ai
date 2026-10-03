@@ -1,6 +1,8 @@
+import asyncio
 import json
 import uuid
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +10,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from google.genai import types
 
-from app.config import GEMINI_API_KEY, GEMINI_MODEL, HOST, PORT
+from app.config import GEMINI_API_KEY, HOST, PORT
 from app.engine import client
 from app.memory import Memory
 
@@ -27,25 +29,42 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 mem = Memory("data/strata.db")
 
-SYSTEM_PROMPT = """
-You are Strata, a helpful and intelligent AI assistant.
-You have access to real-time information through web search.
 
-Behavior Guidelines:
-- Be conversational, clear, and direct.
-- Provide accurate, evidence-based responses.
-- When information might be outdated, mention it and offer to search.
-- Break down complex topics step-by-step.
-- For code requests, provide clean, well-commented examples.
-- Always cite sources when using web search results.
-- Be concise but thorough.
-- Adapt your tone to the user's style.
+def load_available_models():
+    """Dynamically load all available models from instruction files."""
+    instructions_dir = Path(__file__).parent / "instructions"
+    models = {}
 
-Tools Available:
-- Google Search: Search for current information
-- Web Retrieval: Extract content from webpages
-- Conversation Memory: Maintain context across messages
-"""
+    if instructions_dir.exists():
+        for file in instructions_dir.glob("*.txt"):
+            model_name = file.stem
+            models[model_name] = {
+                "model_id": "gemini-1.5-flash",
+                "name": model_name.capitalize()
+            }
+    
+    if not models:
+        models["default"] = {
+            "model_id": "gemini-1.5-flash",
+            "name": "Default"
+        }
+    
+    return models
+
+
+AVAILABLE_MODELS = load_available_models()
+
+
+def get_default_instructions() -> str:
+    return "You are Strata, a helpful and intelligent AI assistant."
+
+
+def load_instructions(model_type: str = "default") -> str:
+    """Load system instructions from file based on model type."""
+    instructions_file = Path(__file__).parent / "instructions" / f"{model_type}.txt"
+    if instructions_file.exists():
+        return instructions_file.read_text(encoding="utf-8").strip()
+    return get_default_instructions()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -54,11 +73,17 @@ def home():
         return f.read()
 
 
+@app.get("/api/models")
+def get_models():
+    """Return available AI models."""
+    return {"models": list(AVAILABLE_MODELS.keys())}
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
-        "model": GEMINI_MODEL,
+        "model": "gemini-1.5-flash",
         "api_key_configured": bool(GEMINI_API_KEY),
     }
 
@@ -75,6 +100,8 @@ async def chat(req: Request):
 
     body = await req.json()
     message = str(body.get("message", "")).strip()
+    model_type = str(body.get("model_type", "default")).strip() or "default"
+
     if not message:
         return JSONResponse({"error": "Message is required."}, status_code=400)
 
@@ -88,16 +115,12 @@ async def chat(req: Request):
     mem.add(session_id, "user", message)
 
     async def stream_response():
-        thinking_steps = [
-            ("🔍", "Analyzing your question..."),
-            ("🌐", "Searching the web for latest information..."),
-            ("📚", "Retrieving relevant knowledge..."),
-            ("⚙️", "Processing and synthesizing response..."),
-            ("✅", "Preparing final answer..."),
+        thinking_stages = [
+            "Analyzing your question...",
+            "Thinking about the best approach...",
+            "Formulating response...",
+            "Finalizing answer...",
         ]
-
-        for emoji, step in thinking_steps:
-            yield "data: " + json.dumps({"type": "status", "message": step, "emoji": emoji}) + "\n\n"
 
         try:
             contents = []
@@ -120,17 +143,23 @@ async def chat(req: Request):
                 )
             )
 
+            system_prompt = load_instructions(model_type)
+
             config = types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=system_prompt,
                 temperature=0.7,
                 top_p=0.9,
                 top_k=40,
                 max_output_tokens=2048,
-                tools=[types.Tool(google_search=types.GoogleSearch())],
             )
 
+            for i, stage in enumerate(thinking_stages):
+                yield "data: " + json.dumps({"type": "status", "message": stage}) + "\n\n"
+                if i < len(thinking_stages) - 1:
+                    await asyncio.sleep(0.05)
+
             response = await client.aio.models.generate_content(
-                model=GEMINI_MODEL,
+                model="gemini-1.5-flash",
                 contents=contents,
                 config=config,
             )
