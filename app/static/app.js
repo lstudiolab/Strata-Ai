@@ -12,7 +12,10 @@ const contextClose = document.getElementById("contextClose");
 
 const API_BASE =
   (window.STRATA_API_URL || document.documentElement.dataset.apiBase || "")
-    .replace(/\/$/, "");
+    .replace(/            renderAssistantMessage(assistantMessage, payload.message || fullAnswer);
+          }
+
+          scrollToActive(assistantGroup, "smooth");/$/, "");
 
 if (!sessionId) {
   sessionId = "session_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
@@ -31,6 +34,7 @@ function scrollToActive(group, behavior = "smooth") {
 }
 
 
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -42,12 +46,12 @@ function escapeHtml(value) {
 
 function renderInlineMarkdown(value) {
   let html = escapeHtml(value);
-  html = html.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  html = html.replace(/\\*\\*([^*\\n]+)\\*\\*/g, "<strong>$1</strong>");
-  html = html.replace(/__([^_\\n]+)__/g, "<strong>$1</strong>");
-  html = html.replace(/\\*([^*\\n]+)\\*/g, "<em>$1</em>");
-  html = html.replace(/_([^_\\n]+)_/g, "<em>$1</em>");
-  html = html.replace(/\\x60([^\\x60\\n]+)\\x60/g, '<span class="inline-code">$1</span>');
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  html = html.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/__([^_\n]+)__/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  html = html.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+  html = html.replace(/\x60([^\x60\n]+)\x60/g, '<span class="inline-code">$1</span>');
   return html;
 }
 
@@ -56,17 +60,17 @@ function copyIconSvg() {
 }
 
 function renderMarkdown(value) {
-  const source = String(value || "").replace(/\\r\\n/g, "\\n");
-  const parts = source.split(/(\\x60{3,}[^\\n]*\\n?[\\s\\S]*?\\x60{3,})/g);
+  const source = String(value || "").replace(/\r\n/g, "\n");
+  const parts = source.split(/(\x60{3,}[^\n]*\n?[\s\S]*?\x60{3,})/g);
   const html = [];
 
   for (const part of parts) {
     if (!part) continue;
 
-    const fence = part.match(/^\\x60{3,}([^\\n]*)\\n?([\\s\\S]*?)\\n?\\x60{3,}$/);
+    const fence = part.match(/^\x60{3,}([^\n]*)\n?([\s\S]*?)\n?\x60{3,}$/);
     if (fence) {
       const label = fence[1].trim() || "text";
-      const content = fence[2].replace(/\\n$/, "");
+      const content = fence[2].replace(/\n$/, "");
       html.push(
         '<div class="copy-block">' +
           '<div class="copy-block-header">' +
@@ -76,16 +80,13 @@ function renderMarkdown(value) {
               "<span>Copy</span>" +
             "</button>" +
           "</div>" +
-          '<pre class="copy-block-content"><code></code></pre>' +
+          '<pre class="copy-block-content"><code>' + escapeHtml(content) + "</code></pre>" +
         "</div>"
       );
-
-      const block = html[html.length - 1];
-      html[html.length - 1] = block.replace("<code></code>", "<code>" + escapeHtml(content) + "</code>");
       continue;
     }
 
-    const lines = part.split("\\n");
+    const lines = part.split("\n");
     let inList = false;
     let listType = "";
 
@@ -106,8 +107,8 @@ function renderMarkdown(value) {
         continue;
       }
 
-      const unordered = trimmed.match(/^[-*+]\\s+(.+)$/);
-      const ordered = trimmed.match(/^\\d+[.)]\\s+(.+)$/);
+      const unordered = trimmed.match(/^[-*+]\s+(.+)$/);
+      const ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
 
       if (unordered || ordered) {
         const type = ordered ? "ol" : "ul";
@@ -123,7 +124,7 @@ function renderMarkdown(value) {
 
       closeList();
 
-      const heading = trimmed.match(/^(#{1,6})\\s+(.+)$/);
+      const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
       if (heading) {
         const level = Math.min(heading[1].length, 6);
         html.push("<h" + level + ">" + renderInlineMarkdown(heading[2]) + "</h" + level + ">");
@@ -183,7 +184,9 @@ function attachCopyButtons(root) {
     });
   });
 }
-\nfunction addMessage(role, text, isStatus = false) {
+
+
+function addMessage(role, text, isStatus = false) {
   const group = document.createElement("div");
   group.className = "message-group " + role;
 
@@ -199,207 +202,3 @@ function attachCopyButtons(root) {
   return msg;
 }
 
-function updateLastStatus(text) {
-  const statuses = messagesContainer.querySelectorAll(".message.status");
-  if (statuses.length > 0) {
-    statuses[statuses.length - 1].textContent = text;
-  }
-}
-
-function removeLastStatus() {
-  const statuses = messagesContainer.querySelectorAll(".message.status");
-  if (!statuses.length) return;
-  statuses[statuses.length - 1].parentElement.remove();
-}
-
-async function sendMessage() {
-  if (isLoading) return;
-
-  const message = messageInput.value.trim();
-  const contextText = contextInput ? contextInput.value.trim() : "";
-  if (!message) return;
-
-  isLoading = true;
-  messageInput.disabled = true;
-  sendButton.disabled = true;
-  messageInput.value = "";
-
-  const userMessage = addMessage("user", message);
-  scrollToActive(userMessage.parentElement);
-
-  let assistantMessage = null;
-  let assistantGroup = null;
-  let fullAnswer = "";
-
-  try {
-    const response = await fetch(API_BASE + "/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-      },
-      body: JSON.stringify({
-        message,
-        session_id: sessionId,
-        model_type: "strata",
-        pasted_text: contextText,
-      }),
-    });
-
-    if (!response.ok) {
-      let errorText = "Failed to connect to the AI server.";
-      try {
-        const errorData = await response.json();
-        if (errorData.error) errorText = errorData.error;
-      } catch (_) {}
-      addMessage("assistant", errorText);
-      return;
-    }
-
-    if (!response.body) {
-      addMessage("assistant", "The AI server returned an empty response.");
-      return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    const processEvent = (event) => {
-      const dataLine = event
-        .split("\n")
-        .find((line) => line.startsWith("data:"));
-
-      if (!dataLine) return;
-
-      const raw = dataLine.replace(/^data:\s?/, "").trim();
-      if (!raw) return;
-
-      try {
-        const payload = JSON.parse(raw);
-
-        if (payload.type === "status") {
-          const existingStatus = messagesContainer.querySelector(".message.status");
-          if (existingStatus) {
-            updateLastStatus(payload.message);
-          } else {
-            addMessage("assistant", payload.message || "Thinking...", true);
-          }
-        } else if (payload.type === "delta") {
-          removeLastStatus();
-          fullAnswer += payload.message || "";
-
-          if (!assistantMessage) {
-            assistantMessage = addMessage("assistant", "");
-            assistantGroup = assistantMessage.parentElement;
-          }
-
-          assistantMessage.textContent = fullAnswer;
-          scrollToActive(assistantGroup, "auto");
-        } else if (payload.type === "answer") {
-          removeLastStatus();
-
-          if (!assistantMessage) {
-            assistantMessage = addMessage("assistant", payload.message || "");
-            assistantGroup = assistantMessage.parentElement;
-          } else {
-            assistantMessage.textContent = payload.message || fullAnswer;
-          }
-
-          scrollToActive(assistantGroup, "smooth");
-        } else if (payload.type === "error") {
-          removeLastStatus();
-          addMessage("assistant", payload.message || "The AI request failed.");
-        }
-      } catch (error) {
-        console.warn("SSE parse error:", error);
-      }
-    };
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() || "";
-
-      for (const event of events) {
-        processEvent(event);
-      }
-    }
-
-    buffer += decoder.decode();
-    if (buffer.trim()) processEvent(buffer);
-  } catch (error) {
-    console.error("Chat request failed:", error);
-    removeLastStatus();
-    addMessage("assistant", "An error occurred while contacting Strata.");
-  } finally {
-    resetInput();
-  }
-}
-
-function resetInput() {
-  isLoading = false;
-  messageInput.disabled = false;
-  sendButton.disabled = false;
-  messageInput.focus();
-}
-
-function toggleContextPanel() {
-  if (!contextPanel) return;
-  contextPanel.hidden = !contextPanel.hidden;
-  if (!contextPanel.hidden) {
-    contextInput.focus();
-  } else {
-    messageInput.focus();
-  }
-}
-
-contextButton.addEventListener("click", async () => {
-  if (!contextPanel.hidden) {
-    toggleContextPanel();
-    return;
-  }
-
-  contextPanel.hidden = false;
-  contextInput.focus();
-
-  if (!contextInput.value && navigator.clipboard && navigator.clipboard.readText) {
-    try {
-      const clipboardText = await navigator.clipboard.readText();
-      if (clipboardText.trim()) {
-        contextInput.value = clipboardText;
-      }
-    } catch (_) {
-      // The user can paste normally when clipboard permission is unavailable.
-    }
-  }
-});
-
-contextClose.addEventListener("click", toggleContextPanel);
-
-contextInput.addEventListener("input", () => {
-  const count = contextInput.value.length;
-  contextButton.setAttribute(
-    "aria-label",
-    count ? "Text attached" : "Add text"
-  );
-});
-
-chatForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  sendMessage();
-});
-
-messageInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey && !isLoading) {
-    event.preventDefault();
-    sendMessage();
-  }
-});
-
-window.addEventListener("load", () => {
-  addMessage("assistant", "Hi! I'm Strata AI. How can I help you today?");
-});
