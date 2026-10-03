@@ -15,6 +15,15 @@ const conversationDrawer = document.getElementById("conversationDrawer");
 const drawerBackdrop = document.getElementById("drawerBackdrop");
 const conversationList = document.getElementById("conversationList");
 const newConversationButton = document.getElementById("newConversationButton");
+const creditsButton = document.getElementById("creditsButton");
+const creditsPanel = document.getElementById("creditsPanel");
+const creditsClose = document.getElementById("creditsClose");
+const requestsPercent = document.getElementById("requestsPercent");
+const requestsBar = document.getElementById("requestsBar");
+const requestsDetail = document.getElementById("requestsDetail");
+const tokensPercent = document.getElementById("tokensPercent");
+const tokensBar = document.getElementById("tokensBar");
+const tokensDetail = document.getElementById("tokensDetail");
 
 const API_BASE =
   (window.STRATA_API_URL || document.documentElement.dataset.apiBase || "")
@@ -219,6 +228,50 @@ function removeLastStatus() {
   const statuses = messagesContainer.querySelectorAll(".message.status");
   if (!statuses.length) return;
   statuses[statuses.length - 1].parentElement.remove();
+}
+
+function openCreditsPanel() {
+  creditsPanel?.classList.add("open");
+  creditsPanel?.setAttribute("aria-hidden", "false");
+  creditsButton?.setAttribute("aria-expanded", "true");
+  loadCredits();
+}
+
+function closeCreditsPanel() {
+  creditsPanel?.classList.remove("open");
+  creditsPanel?.setAttribute("aria-hidden", "true");
+  creditsButton?.setAttribute("aria-expanded", "false");
+}
+
+function updateCreditMeter(label, bar, value) {
+  if (value == null) {
+    label.textContent = "—";
+    bar.style.width = "0%";
+    return;
+  }
+  const percent = Math.max(0, Math.min(100, Number(value)));
+  label.textContent = percent.toFixed(1) + "%";
+  bar.style.width = percent + "%";
+}
+
+async function loadCredits() {
+  try {
+    const response = await fetch(API_BASE + "/api/credits");
+    const data = await response.json();
+    const requests = data.requests || {};
+    const tokens = data.tokens || {};
+    updateCreditMeter(requestsPercent, requestsBar, requests.remaining_percent);
+    updateCreditMeter(tokensPercent, tokensBar, tokens.remaining_percent);
+    requestsDetail.textContent = requests.remaining != null
+      ? requests.remaining.toLocaleString() + " of " + requests.limit.toLocaleString() + " requests remaining"
+      : "Send a message to measure this quota.";
+    tokensDetail.textContent = tokens.remaining != null
+      ? tokens.remaining.toLocaleString() + " of " + tokens.limit.toLocaleString() + " tokens remaining"
+      : "Send a message to measure this quota.";
+  } catch (_) {
+    requestsDetail.textContent = "Usage unavailable.";
+    tokensDetail.textContent = "Usage unavailable.";
+  }
 }
 
 function openConversationDrawer() {
@@ -503,6 +556,8 @@ window.addEventListener("load", () => {
 });
 
 historyButton?.addEventListener("click", openConversationDrawer);
+creditsButton?.addEventListener("click", openCreditsPanel);
+creditsClose?.addEventListener("click", closeCreditsPanel);
 historyClose?.addEventListener("click", closeConversationDrawer);
 drawerBackdrop?.addEventListener("click", closeConversationDrawer);
 newConversationButton?.addEventListener("click", startNewConversation);
