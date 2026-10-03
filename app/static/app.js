@@ -8,9 +8,6 @@ const chatForm = document.getElementById("chatForm");
 const attachmentButton = document.getElementById("attachmentButton");
 const fileInput = document.getElementById("fileInput");
 const attachmentPreview = document.getElementById("attachmentPreview");
-const contextPanel = document.getElementById("contextPanel");
-const contextInput = document.getElementById("contextInput");
-const contextClose = document.getElementById("contextClose");
 let selectedAttachment = null;
 let selectedAttachmentData = "";
 
@@ -306,6 +303,7 @@ async function sendMessage() {
   messageInput.disabled = true;
   sendButton.disabled = true;
   messageInput.value = "";
+  messageInput.blur();
 
   const displayMessage = message || (selectedAttachment?.name ? "Attached: " + selectedAttachment.name : "Image");
   const sentAttachment = selectedAttachment && selectedAttachment.type.startsWith("image/")
@@ -437,16 +435,6 @@ function resetInput() {
   sendButton.disabled = false;
 }
 
-function toggleContextPanel() {
-  if (!contextPanel) return;
-  contextPanel.hidden = !contextPanel.hidden;
-  if (!contextPanel.hidden) {
-    contextInput.focus();
-  } else {
-    messageInput.focus();
-  }
-}
-
 function renderAttachmentPreview() {
   if (!attachmentPreview) return;
   attachmentPreview.innerHTML = "";
@@ -537,12 +525,7 @@ fileInput?.addEventListener("change", async () => {
   renderAttachmentPreview();
 });
 
-contextClose?.addEventListener("click", toggleContextPanel);
 
-contextInput?.addEventListener("input", () => {
-  const count = contextInput.value.length;
-  attachmentButton?.setAttribute("aria-label", count ? "Add a file" : "Add a photo or file");
-});
 
 chatForm.addEventListener("submit", (event) => {
   event.preventDefault();
