@@ -711,3 +711,50 @@ button { -webkit-tap-highlight-color: transparent; }
     transition: none !important;
   }
 }
+
+
+/* Apple-like motion: quiet, physical, and deliberately restrained. */
+@keyframes strataMessageIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes strataActionIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-enter {
+  animation: strataMessageIn .34s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.message-complete .response-actions-enter {
+  animation: strataActionIn .28s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.message-complete .response-actions {
+  opacity: 1;
+}
+
+.response-actions {
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-enter,
+  .message-complete .response-actions-enter {
+    animation: none !important;
+  }
+}
