@@ -304,6 +304,12 @@ function removeLastStatus() {
 
 async function sendMessage() {
   if (isLoading) return;
+  const currentMessageCount = messagesContainer.querySelectorAll(".message-group.user").length + messagesContainer.querySelectorAll(".message-group.assistant").length;
+  if (currentMessageCount >= MEMORY_LIMIT) {
+    addMessage("assistant", "This conversation has reached Strata’s memory limit of " + MEMORY_LIMIT + " messages. Start a new conversation to continue.");
+    openConversationDrawer();
+    return;
+  }
 
   const message = messageInput.value.trim();
   const contextText = "";
@@ -636,7 +642,14 @@ messageInput.addEventListener("keydown", (event) => {
   }
 });
 
+settingsButton?.addEventListener("click", openSettings);
+settingsClose?.addEventListener("click", closeSettings);
+conversationClose?.addEventListener("click", closeConversationDrawer);
+drawerBackdrop?.addEventListener("click", closeConversationDrawer);
+newConversationButton?.addEventListener("click", startNewConversation);
+
 window.addEventListener("load", () => {
   if (!messagesContainer.children.length) addMessage("assistant", "Hi, I'm Strata. How can I help?");
+  if (memoryLimitText) memoryLimitText.textContent = MEMORY_LIMIT + " messages per conversation";
 });
 
