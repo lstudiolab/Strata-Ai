@@ -11,25 +11,14 @@
     <div class="app-container">
       <header class="header">
         <div class="header-content">
-          <button id="conversationButton" class="glass-icon-button" type="button" aria-label="Conversations">☰</button>
           <h1>Strata</h1>
           <button id="settingsButton" class="glass-icon-button" type="button" aria-label="AI settings">•••</button>
         </div>
       </header>
 
-      <aside id="conversationDrawer" class="conversation-drawer" aria-hidden="true">
-        <div class="drawer-header">
-          <h2>Conversations</h2>
-          <button id="conversationClose" class="drawer-close" type="button" aria-label="Close">×</button>
-        </div>
-        <button id="newConversationButton" class="new-conversation-button" type="button">New conversation</button>
-        <div id="conversationList" class="conversation-list"></div>
-      </aside>
-      <div id="drawerBackdrop" class="drawer-backdrop"></div>
-
       <aside id="settingsPanel" class="settings-panel" aria-hidden="true">
         <div class="settings-header">
-          <h2>Strata</h2>
+          <h2>Settings</h2>
           <button id="settingsClose" class="drawer-close" type="button" aria-label="Close">×</button>
         </div>
         <div class="setting-row">
@@ -37,6 +26,11 @@
           <span id="memoryLimitText">50 messages per conversation</span>
         </div>
         <p class="settings-note">When a conversation reaches its memory limit, Strata will ask you to start a new conversation.</p>
+        <div class="settings-section">
+          <div class="settings-section-title">Conversations</div>
+          <button id="newConversationButton" class="new-conversation-button" type="button">New conversation</button>
+          <div id="conversationList" class="conversation-list settings-conversation-list"></div>
+        </div>
       </aside>
 
       <main class="chat-container" aria-label="Strata conversation">
