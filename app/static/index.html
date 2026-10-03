@@ -8,23 +8,28 @@
   </head>
   <body>
     <div class="app-container">
-      <!-- Header -->
       <div class="header">
         <div class="header-content">
           <div class="logo-section">
             <div class="logo">⚡</div>
-            <h1>Strata AI</h1>
+            <h1>Strata</h1>
           </div>
-          <p class="subtitle">Your intelligent AI assistant</p>
+          <div class="model-selector">
+            <label for="modelSelect">Model:</label>
+            <select id="modelSelect" class="model-dropdown">
+              <option value="default">Default</option>
+              <option value="creative">Creative</option>
+              <option value="analytical">Analytical</option>
+              <option value="coding">Coding</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <!-- Chat Container -->
       <div class="chat-container">
         <div id="messages" class="messages"></div>
       </div>
 
-      <!-- Input Area -->
       <div class="input-container">
         <div class="input-wrapper">
           <input
