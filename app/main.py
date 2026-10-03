@@ -45,10 +45,10 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 mem = Memory(DB_PATH)
 
 AVAILABLE_MODELS = {
-    "default": {"model_id": GEMINI_MODEL, "name": "Default"},
-    "creative": {"model_id": GEMINI_MODEL, "name": "Creative"},
-    "analytical": {"model_id": GEMINI_MODEL, "name": "Analytical"},
-    "coding": {"model_id": GEMINI_MODEL, "name": "Coding"},
+    "strata": {"model_id": GEMINI_MODEL, "name": "Strata 1.0"},
+    "saber": {"model_id": GEMINI_MODEL, "name": "Saber 1.0"},
+    "zen": {"model_id": GEMINI_MODEL, "name": "Zen 1.0"},
+    "marcus": {"model_id": GEMINI_MODEL, "name": "Marcus 1.0"},
 }
 
 
@@ -63,7 +63,7 @@ def get_default_instructions() -> str:
 
 
 def load_instructions(model_type: str) -> str:
-    safe_name = model_type if model_type in AVAILABLE_MODELS else "default"
+    safe_name = model_type if model_type in AVAILABLE_MODELS else "strata"
     path = INSTRUCTIONS_DIR / f"{safe_name}.txt"
     if path.is_file():
         text = path.read_text(encoding="utf-8").strip()
@@ -161,9 +161,9 @@ async def chat(req: Request):
         return JSONResponse({"error": "Request body must be a JSON object."}, status_code=400)
 
     message = str(body.get("message", "")).strip()
-    model_type = str(body.get("model_type", "default")).strip() or "default"
+    model_type = str(body.get("model_type", "strata")).strip() or "default"
     if model_type not in AVAILABLE_MODELS:
-        model_type = "default"
+        model_type = "strata"
 
     if not message:
         return JSONResponse({"error": "Message is required."}, status_code=400)
