@@ -37,58 +37,100 @@ class GroqClient:
         """
         return DEFAULT_MODEL
 
-    async def stream_chat(
+    async def run_agent(
         self,
         model: str,
         system_prompt: str,
-        messages: list[dict[str, str]],
-    ) -> AsyncIterator[str]:
-        payload = {
-            "model": model or DEFAULT_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                *messages,
-            ],
-            "stream": True,
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "top_p": 0.9,
-        }
+        messages: list[dict],
+        pasted_text: str = "",
+        on_tool=None,
+    ) -> str:
+        working = [
+            {"role": "system", "content": system_prompt},
+            *messages,
+        ]
 
-        timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=None)
+        tools = []
+        if pasted_text.strip():
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "get_pasted_text",
+                    "description": (
+                        "Read text the user explicitly pasted for this request. "
+                        "Use it when the user wants the pasted text analyzed, "
+                        "summarized, rewritten, extracted, compared, or explained."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                },
+            })
+
+        timeout = aiohttp.ClientTimeout(total=180, sock_connect=30, sock_read=None)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
-                f"{GROQ_BASE_URL}/chat/completions",
-                headers=self._headers(),
-                json=payload,
-            ) as response:
-                if response.status != 200:
-                    detail = await response.text()
-                    raise RuntimeError(
-                        f"Groq returned HTTP {response.status}: {detail[:320]}"
-                    )
+            for round_number in range(6):
+                payload = {
+                    "model": model or DEFAULT_MODEL,
+                    "messages": working,
+                    "stream": False,
+                    "max_tokens": 8192,
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "reasoning_effort": "medium",
+                    "tool_choice": "auto",
+                }
+                if tools:
+                    payload["tools"] = tools
 
-                async for raw_line in response.content:
-                    line = raw_line.decode("utf-8", errors="ignore").strip()
-                    if not line or not line.startswith("data:"):
-                        continue
+                async with session.post(
+                    f"{GROQ_BASE_URL}/chat/completions",
+                    headers=self._headers(),
+                    json=payload,
+                ) as response:
+                    if response.status != 200:
+                        detail = await response.text()
+                        raise RuntimeError(
+                            f"Groq returned HTTP {response.status}: {detail[:400]}"
+                        )
+                    data = await response.json()
 
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        break
+                choice = (data.get("choices") or [{}])[0]
+                message = choice.get("message") or {}
+                calls = message.get("tool_calls") or []
 
-                    try:
-                        event = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
+                if not calls:
+                    return (message.get("content") or "").strip()
 
-                    choices = event.get("choices") or []
-                    if not choices:
-                        continue
+                working.append({
+                    "role": "assistant",
+                    "content": message.get("content"),
+                    "tool_calls": calls,
+                })
 
-                    delta = (choices[0].get("delta") or {}).get("content")
-                    if isinstance(delta, str) and delta:
-                        yield delta
+                for call in calls:
+                    function = call.get("function") or {}
+                    name = function.get("name", "")
+                    call_id = call.get("id", "")
+
+                    if on_tool is not None:
+                        await on_tool(name, round_number + 1)
+
+                    if name == "get_pasted_text":
+                        result = pasted_text
+                    else:
+                        result = "This tool is unavailable."
+
+                    working.append({
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": name,
+                        "content": result,
+                    })
+
+            raise RuntimeError("Strata reached the maximum tool-use rounds.")
 
 
 client = GroqClient(GEMINI_API_KEY) if GEMINI_API_KEY else None
