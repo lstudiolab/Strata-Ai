@@ -210,24 +210,50 @@ function addMessage(role, text, isStatus = false) {
   msg.className = "message " + role;
   if (isStatus) msg.classList.add("status");
   if (role === "assistant" && !isStatus) {
-    renderAssistantMessage(msg, text);
-  } else {
-    msg.textContent = text;
-  }
+    const actions = document.createElement("div");
+    actions.className = "response-actions";
 
-  group.appendChild(msg);
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.className = "response-action";
+    copyButton.setAttribute("aria-label", "Copy response");
+    copyButton.innerHTML = copyIconSvg() + "<span>Copy</span>";
+    copyButton.addEventListener("click", async () => {
+      const text = msg.textContent || "";
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (_) {
+        const fallback = document.createElement("textarea");
+        fallback.value = text;
+        fallback.setAttribute("readonly", "");
+        fallback.style.position = "fixed";
+        fallback.style.opacity = "0";
+        document.body.appendChild(fallback);
+        fallback.select();
+        document.execCommand("copy");
+        fallback.remove();
+      }
+      const label = copyButton.querySelector("span");
+      if (label) label.textContent = "Copied";
+      copyButton.classList.add("copied");
+      window.setTimeout(() => {
+        if (label) label.textContent = "Copy";
+        copyButton.classList.remove("copied");
+      }, 1400);
+    });
 
-  if (role === "assistant" && !isStatus) {
     const ttsButton = document.createElement("button");
     ttsButton.type = "button";
-    ttsButton.className = "tts-button";
+    ttsButton.className = "response-action tts-button";
     ttsButton.setAttribute("aria-label", "Read response aloud");
-    ttsButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"></path><path d="M16 9.5c1.2 1.2 1.2 3.8 0 5"></path><path d="M18.5 7c2.6 2.7 2.6 7.3 0 10"></path></svg>';
+    ttsButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"></path><path d="M16 9.5c1.2 1.2 1.2 3.8 0 5"></path><path d="M18.5 7c2.6 2.7 2.6 7.3 0 10"></path></svg><span>Listen</span>';
     ttsButton.addEventListener("click", () => {
       if (!("speechSynthesis" in window)) return;
       if (speechSynthesis.speaking) {
         speechSynthesis.cancel();
         ttsButton.classList.remove("speaking");
+        const label = ttsButton.querySelector("span");
+        if (label) label.textContent = "Listen";
         return;
       }
       speechSynthesis.cancel();
@@ -235,13 +261,22 @@ function addMessage(role, text, isStatus = false) {
       utterance.rate = 0.98;
       utterance.pitch = 1;
       ttsButton.classList.add("speaking");
-      utterance.onend = () => ttsButton.classList.remove("speaking");
-      utterance.onerror = () => ttsButton.classList.remove("speaking");
+      const label = ttsButton.querySelector("span");
+      if (label) label.textContent = "Stop";
+      utterance.onend = () => {
+        ttsButton.classList.remove("speaking");
+        if (label) label.textContent = "Listen";
+      };
+      utterance.onerror = () => {
+        ttsButton.classList.remove("speaking");
+        if (label) label.textContent = "Listen";
+      };
       speechSynthesis.speak(utterance);
     });
-    group.appendChild(ttsButton);
-  }
 
+    actions.append(copyButton, ttsButton);
+    group.appendChild(actions);
+  }
   messagesContainer.appendChild(group);
   scrollToActive(group);
 
