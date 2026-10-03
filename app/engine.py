@@ -50,49 +50,6 @@ class GroqClient:
             percent = None if remaining is None or not limit else round(max(0, min(100, remaining / limit * 100)), 1)
             result[key] = {**bucket, "remaining_percent": percent}
         return result
-        self.rate_limits = {
-            "requests": {"remaining": None, "limit": None, "reset": None},
-            "tokens": {"remaining": None, "limit": None, "reset": None},
-        }
-
-    def _record_rate_limits(self, response) -> None:
-        def number(name: str):
-            value = response.headers.get(name)
-            try:
-                return int(value) if value is not None else None
-            except (TypeError, ValueError):
-                return None
-
-        self.rate_limits["requests"] = {
-            "remaining": number("x-ratelimit-remaining-requests"),
-            "limit": number("x-ratelimit-limit-requests"),
-            "reset": response.headers.get("x-ratelimit-reset-requests"),
-        }
-        self.rate_limits["tokens"] = {
-            "remaining": number("x-ratelimit-remaining-tokens"),
-            "limit": number("x-ratelimit-limit-tokens"),
-            "reset": response.headers.get("x-ratelimit-reset-tokens"),
-        }
-
-    def credit_status(self) -> dict:
-        def percentage(bucket):
-            remaining = bucket["remaining"]
-            limit = bucket["limit"]
-            if remaining is None or limit is None or limit <= 0:
-                return None
-            return round(max(0.0, min(100.0, remaining / limit * 100.0)), 1)
-
-        return {
-            "requests": {
-                **self.rate_limits["requests"],
-                "remaining_percent": percentage(self.rate_limits["requests"]),
-            },
-            "tokens": {
-                **self.rate_limits["tokens"],
-                "remaining_percent": percentage(self.rate_limits["tokens"]),
-            },
-            "source": "Groq rate-limit headers",
-        }
 
     @property
     def configured(self) -> bool:
@@ -374,15 +331,15 @@ class GroqClient:
 
         timeout = aiohttp.ClientTimeout(total=180, sock_connect=30, sock_read=None)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            for round_number in range(6):
+            for round_number in range(10):
                 payload = {
                     "model": model or DEFAULT_MODEL,
                     "messages": working,
                     "stream": False,
-                    "max_tokens": 8192,
+                    "max_tokens": 12000,
                     "temperature": 0.7,
                     "top_p": 0.9,
-                    "reasoning_effort": "medium",
+                    "reasoning_effort": "high",
                     "tool_choice": "auto",
                 }
                 if tools:
