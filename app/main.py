@@ -32,7 +32,6 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 mem = Memory(DB_PATH)
-MEMORY_LIMIT = 50
 
 
 def get_default_instructions() -> str:
@@ -54,8 +53,17 @@ def load_instructions() -> str:
     return get_default_instructions()
 
 
-def make_messages(history, first_question: str, message: str):
+def make_messages(history, first_question: str, message: str, memory_summary: str = ""):
     messages = []
+    if memory_summary:
+        messages.append({
+            "role": "system",
+            "content": (
+                "Long-term conversation memory. Treat this as trusted context from earlier "
+                "turns. Use it to preserve continuity, but prefer the user's current message "
+                "when there is a conflict.\n\n" + memory_summary
+            ),
+        })
     for role, text in history:
         messages.append({
             "role": "user" if role == "user" else "assistant",
@@ -177,18 +185,7 @@ async def chat(req: Request):
         first_question = message or str(body.get("attachment_name", "Image attachment"))
         mem.start(session_id, first_question)
 
-    history = mem.history(session_id)
-    if mem.count_messages(session_id) >= MEMORY_LIMIT:
-        return JSONResponse(
-            {
-                "error": "This conversation has reached Strata’s memory limit of "
-                + str(MEMORY_LIMIT)
-                + " messages. Start a new conversation to continue.",
-                "memory_limit": MEMORY_LIMIT,
-            },
-            status_code=409,
-        )
-
+    history = mem.history(session_id, limit=32)
     mem.add(session_id, "user", message)
 
     async def stream_response():
@@ -230,7 +227,32 @@ async def chat(req: Request):
                     ". Treat this as clarification of the same request, not a new request."
                 )
 
-            messages = make_messages(history, first_question, message)
+            # There is no fixed conversation limit. When the stored conversation
+            # grows, compact older turns into durable memory and keep the newest turns
+            # verbatim. The database retains every original message.
+            memory_summary, summary_through = mem.memory_summary(session_id)
+            unsummarized = mem.history_after(session_id, summary_through, limit=200)
+            if len(unsummarized) >= 40:
+                try:
+                    compacted = await client.summarize_memory(
+                        memory_summary,
+                        [
+                            {"role": role, "content": content}
+                            for _, role, content in unsummarized
+                        ],
+                    )
+                    if compacted:
+                        mem.update_memory_summary(
+                            session_id,
+                            compacted,
+                            unsummarized[-1][0],
+                        )
+                        memory_summary = compacted
+                except Exception:
+                    logger.exception("Conversation memory compaction failed")
+
+            history = mem.history(session_id, limit=32)
+            messages = make_messages(history, first_question, message, memory_summary)
 
             async def on_tool(name: str, round_number: int):
                 labels = {
