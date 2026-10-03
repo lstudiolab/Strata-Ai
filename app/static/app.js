@@ -460,18 +460,12 @@ function openSettings() {
 }
 
 function closeConversationDrawer() {
-  if (!conversationDrawer) return;
-  conversationDrawer.classList.remove("open");
-  conversationDrawer.setAttribute("aria-hidden", "true");
-  drawerBackdrop?.classList.remove("open");
+  closeSettings();
 }
 
 function openConversationDrawer() {
-  if (!conversationDrawer) return;
+  openSettings();
   loadConversations();
-  conversationDrawer.classList.add("open");
-  conversationDrawer.setAttribute("aria-hidden", "false");
-  drawerBackdrop?.classList.add("open");
 }
 
 function startNewConversation() {
