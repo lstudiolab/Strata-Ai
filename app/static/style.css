@@ -862,6 +862,12 @@ select {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.credits-percent {
+  color: #55555a;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
 .credits-orb { background: #77777c; }
 .credits-panel { border-color: rgba(0,0,0,.08); }
 .credit-track span { background: #77777c !important; }
