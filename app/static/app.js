@@ -360,7 +360,8 @@ async function sendMessage() {
   let assistantMessage = null;
   let assistantGroup = null;
   let fullAnswer = "";
-  addMessage("assistant", "Thinking", true);
+  const generationStatus = addMessage("assistant", "Thinking…", true);
+  generationStatus.parentElement.classList.add("generating");
   const abortController = new AbortController();
   window.__strataAbortController = abortController;
 
@@ -389,11 +390,13 @@ async function sendMessage() {
         const errorData = await response.json();
         if (errorData.error) errorText = errorData.error;
       } catch (_) {}
+      removeLastStatus();
       addMessage("assistant", errorText);
       return;
     }
 
     if (!response.body) {
+      removeLastStatus();
       addMessage("assistant", "The AI server returned an empty response.");
       return;
     }
