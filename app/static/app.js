@@ -11,12 +11,6 @@ const attachmentPreview = document.getElementById("attachmentPreview");
 const contextPanel = document.getElementById("contextPanel");
 const contextInput = document.getElementById("contextInput");
 const contextClose = document.getElementById("contextClose");
-const historyButton = document.getElementById("historyButton");
-const historyClose = document.getElementById("historyClose");
-const conversationDrawer = document.getElementById("conversationDrawer");
-const drawerBackdrop = document.getElementById("drawerBackdrop");
-const conversationList = document.getElementById("conversationList");
-const newConversationButton = document.getElementById("newConversationButton");
 const creditsButton = document.getElementById("creditsButton");
 const creditsPanel = document.getElementById("creditsPanel");
 const creditsClose = document.getElementById("creditsClose");
@@ -209,6 +203,8 @@ function addMessage(role, text, isStatus = false) {
   const msg = document.createElement("div");
   msg.className = "message " + role;
   if (isStatus) msg.classList.add("status");
+  group.appendChild(msg);
+
   if (role === "assistant" && !isStatus) {
     const actions = document.createElement("div");
     actions.className = "response-actions";
@@ -346,95 +342,6 @@ async function loadCredits() {
     requestsDetail.textContent = "Usage unavailable.";
     tokensDetail.textContent = "Usage unavailable.";
   }
-}
-
-function openConversationDrawer() {
-  if (!conversationDrawer) return;
-  conversationDrawer.classList.add("open");
-  conversationDrawer.setAttribute("aria-hidden", "false");
-  historyButton?.setAttribute("aria-expanded", "true");
-  if (drawerBackdrop) drawerBackdrop.hidden = false;
-  loadConversations();
-}
-
-function closeConversationDrawer() {
-  if (!conversationDrawer) return;
-  conversationDrawer.classList.remove("open");
-  conversationDrawer.setAttribute("aria-hidden", "true");
-  historyButton?.setAttribute("aria-expanded", "false");
-  if (drawerBackdrop) drawerBackdrop.hidden = true;
-}
-
-async function loadConversations() {
-  if (!conversationList) return;
-  conversationList.innerHTML = '<div class="conversation-empty">Loading conversations…</div>';
-  try {
-    const response = await fetch(API_BASE + "/api/conversations");
-    if (!response.ok) throw new Error("Failed to load conversations");
-    const data = await response.json();
-    const conversations = data.conversations || [];
-
-    if (!conversations.length) {
-      conversationList.innerHTML = '<div class="conversation-empty">No past conversations yet.</div>';
-      return;
-    }
-
-    conversationList.innerHTML = "";
-    conversations.forEach((conversation) => {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.className = "conversation-item";
-      if (conversation.id === sessionId) item.classList.add("active");
-
-      const title = document.createElement("span");
-      title.className = "conversation-title";
-      title.textContent = conversation.title || "Untitled conversation";
-
-      const meta = document.createElement("span");
-      meta.className = "conversation-meta";
-      meta.textContent = conversation.created_at || "";
-
-      item.append(title, meta);
-      item.addEventListener("click", () => loadConversation(conversation.id));
-      conversationList.appendChild(item);
-    });
-  } catch (_) {
-    conversationList.innerHTML = '<div class="conversation-empty">Could not load conversations.</div>';
-  }
-}
-
-async function loadConversation(id) {
-  if (!id) return;
-  try {
-    const response = await fetch(API_BASE + "/api/conversations/" + encodeURIComponent(id));
-    if (!response.ok) throw new Error("Conversation not found");
-    const data = await response.json();
-    sessionId = id;
-    localStorage.setItem("strata_session_id", sessionId);
-    messagesContainer.innerHTML = "";
-
-    for (const message of data.messages || []) {
-      addMessage(message.role === "user" ? "user" : "assistant", message.content);
-    }
-
-    if (!(data.messages || []).length) {
-      addMessage("assistant", "Hi, I'm Strata. How can I help?");
-    }
-
-    closeConversationDrawer();
-    scrollToActive(messagesContainer.lastElementChild, "auto");
-  } catch (_) {
-    closeConversationDrawer();
-    addMessage("assistant", "I couldn't open that conversation.");
-  }
-}
-
-function startNewConversation() {
-  sessionId = "session_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
-  localStorage.setItem("strata_session_id", sessionId);
-  messagesContainer.innerHTML = "";
-  addMessage("assistant", "Hi, I'm Strata. How can I help?");
-  closeConversationDrawer();
 }
 
 async function sendMessage() {
@@ -680,7 +587,7 @@ fileInput?.addEventListener("change", async () => {
 
 contextClose?.addEventListener("click", toggleContextPanel);
 
-contextInput.addEventListener("input", () => {
+contextInput?.addEventListener("input", () => {
   const count = contextInput.value.length;
   attachmentButton?.setAttribute("aria-label", count ? "Add a file" : "Add a photo or file");
 });
@@ -698,12 +605,8 @@ messageInput.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("load", () => {
-  loadConversation(sessionId);
+  if (!messagesContainer.children.length) addMessage("assistant", "Hi, I'm Strata. How can I help?");
 });
 
-historyButton?.addEventListener("click", openConversationDrawer);
 creditsButton?.addEventListener("click", openCreditsPanel);
 creditsClose?.addEventListener("click", closeCreditsPanel);
-historyClose?.addEventListener("click", closeConversationDrawer);
-drawerBackdrop?.addEventListener("click", closeConversationDrawer);
-newConversationButton?.addEventListener("click", startNewConversation);
