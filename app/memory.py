@@ -1,23 +1,29 @@
-import sqlite3
 import logging
+import sqlite3
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 class Memory:
     def __init__(self, path: str):
-        self.path = path
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.path = str(Path(path))
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
+    def _connect(self):
+        db = sqlite3.connect(self.path, timeout=10)
+        db.execute("PRAGMA foreign_keys = ON")
+        return db
+
     def _init_db(self):
-        with sqlite3.connect(self.path) as db:
+        with self._connect() as db:
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
-                    first_question TEXT,
+                    first_question TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -26,62 +32,73 @@ class Memory:
                 """
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT,
-                    role TEXT,
-                    content TEXT,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK(role IN ('user', 'model')),
+                    content TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                    FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
                 )
                 """
             )
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id, id)"
+            )
             db.commit()
 
-    def first(self, session_id: str):
+    def first(self, session_id: str) -> Optional[str]:
         try:
-            with sqlite3.connect(self.path) as db:
+            with self._connect() as db:
                 row = db.execute(
-                    "SELECT first_question FROM sessions WHERE id=?",
+                    "SELECT first_question FROM sessions WHERE id = ?",
                     (session_id,),
                 ).fetchone()
                 return row[0] if row else None
-        except Exception as exc:
-            logger.error(f"Failed to get first question: {exc}")
+        except sqlite3.Error:
+            logger.exception("Failed to get first question")
             return None
 
-    def start(self, session_id: str, first_question: str):
+    def start(self, session_id: str, first_question: str) -> bool:
         try:
-            with sqlite3.connect(self.path) as db:
+            with self._connect() as db:
                 db.execute(
                     "INSERT OR IGNORE INTO sessions(id, first_question) VALUES(?, ?)",
                     (session_id, first_question),
                 )
                 db.commit()
             return True
-        except Exception as exc:
-            logger.error(f"Failed to start session: {exc}")
+        except sqlite3.Error:
+            logger.exception("Failed to start session")
             return False
 
-    def add(self, session_id: str, role: str, content: str):
+    def add(self, session_id: str, role: str, content: str) -> bool:
+        if role not in {"user", "model"}:
+            raise ValueError(f"Unsupported message role: {role}")
         try:
-            with sqlite3.connect(self.path) as db:
+            with self._connect() as db:
                 db.execute(
                     "INSERT INTO messages(session_id, role, content) VALUES(?, ?, ?)",
                     (session_id, role, content),
                 )
                 db.commit()
             return True
-        except Exception as exc:
-            logger.error(f"Failed to add message: {exc}")
+        except sqlite3.Error:
+            logger.exception("Failed to add message")
             return False
 
-    def history(self, session_id: str, limit: int = 20):
+    def history(self, session_id: str, limit: int = 20) -> List[Tuple[str, str]]:
         try:
-            with sqlite3.connect(self.path) as db:
+            with self._connect() as db:
                 rows = db.execute(
-                    "SELECT role, content FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
-                    (session_id, limit),
+                    """
+                    SELECT role, content
+                    FROM messages
+                    WHERE session_id = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (session_id, max(1, int(limit))),
                 ).fetchall()
                 return list(reversed(rows))
-        except Exception as exc:
-            logger.error(f"Failed to read history: {exc}")
+        except sqlite3.Error:
+            logger.exception("Failed to read history")
             return []
