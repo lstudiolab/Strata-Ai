@@ -641,10 +641,7 @@ contextClose?.addEventListener("click", toggleContextPanel);
 
 contextInput.addEventListener("input", () => {
   const count = contextInput.value.length;
-  contextButton.setAttribute(
-    "aria-label",
-    count ? "Text attached" : "Add text"
-  );
+  attachmentButton?.setAttribute("aria-label", count ? "Add a file" : "Add a photo or file");
 });
 
 chatForm.addEventListener("submit", (event) => {
