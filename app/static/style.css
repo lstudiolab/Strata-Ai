@@ -715,43 +715,87 @@ button { -webkit-tap-highlight-color: transparent; }
 
 /* Apple-like motion: quiet, physical, and deliberately restrained. */
 @keyframes strataMessageIn {
-  from {
-    opacity: 0;
-    transform: translateY(7px) scale(.992);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(2px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
-
 @keyframes strataActionIn {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
-.message-enter {
-  animation: strataMessageIn .34s cubic-bezier(.22, 1, .36, 1) both;
+@keyframes strataUserSend {
+  0% { opacity: 0; transform: translate3d(12px, 8px, 0) scale(.94); }
+  55% { opacity: 1; transform: translate3d(-1px, -1px, 0) scale(1.012); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
-
+@keyframes strataGenerating {
+  0%, 100% { opacity: .42; transform: translateY(0); }
+  50% { opacity: .88; transform: translateY(-1px); }
+}
+@keyframes strataTypingPulse {
+  0%, 100% { opacity: .2; transform: scale(.68); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@keyframes strataShimmer {
+  0% { transform: translateX(-130%); opacity: 0; }
+  25% { opacity: .9; }
+  65% { opacity: 0; }
+  100% { transform: translateX(130%); opacity: 0; }
+}
+@keyframes strataSendPress {
+  0% { transform: scale(1); }
+  45% { transform: scale(.91); }
+  100% { transform: scale(1); }
+}
+@keyframes strataStopPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(69,69,73,0); }
+  50% { box-shadow: 0 0 0 5px rgba(69,69,73,.08); }
+}
+.message-enter { animation: strataMessageIn .46s cubic-bezier(.22,1,.36,1) both; }
 .message-complete .response-actions-enter {
-  animation: strataActionIn .28s cubic-bezier(.22, 1, .36, 1) both;
+  animation: strataActionIn .32s cubic-bezier(.22,1,.36,1) both;
 }
-
-.message-complete .response-actions {
-  opacity: 1;
+.message-complete .response-actions { opacity: 1; }
+.message-sent .message.user {
+  animation: strataUserSend .48s cubic-bezier(.22,1,.36,1) both;
 }
-
-.response-actions {
-  transition: opacity .2s ease, transform .2s ease;
+.message-group.generating .message.status {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 92px;
+  padding-right: 28px;
+  animation: strataGenerating 1.65s ease-in-out infinite;
 }
-
+.message-group.generating .message.status::after {
+  content: "•••";
+  position: absolute;
+  right: 0;
+  bottom: .05em;
+  width: 22px;
+  overflow: hidden;
+  letter-spacing: 2px;
+  animation: strataTypingPulse 1.05s ease-in-out infinite;
+}
+.message-group.generating .message.status::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: -7px;
+  bottom: -7px;
+  width: 36px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.055);
+  filter: blur(7px);
+  animation: strataShimmer 1.9s cubic-bezier(.22,1,.36,1) infinite;
+  pointer-events: none;
+}
+.send-button:active { animation: strataSendPress .26s cubic-bezier(.22,1,.36,1); }
+.send-button.stop-generating {
+  animation: strataStopPulse 1.8s ease-in-out infinite;
+}
+.send-button.stop-generating::before {
+  transition: transform .18s cubic-bezier(.22,1,.36,1);
+}
 @media (prefers-reduced-motion: reduce) {
   .message-enter,
   .message-complete .response-actions-enter {
