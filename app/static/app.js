@@ -315,6 +315,23 @@ function removeLastStatus() {
   statuses[statuses.length - 1].parentElement.remove();
 }
 
+async function stopGeneration() {
+  if (!isLoading) return;
+  try {
+    if (window.__strataAbortController) {
+      window.__strataAbortController.abort();
+    }
+  } catch (_) {}
+  isLoading = false;
+  messageInput.disabled = false;
+  sendButton.disabled = false;
+  sendButton.classList.remove("stop-generating");
+  sendButton.setAttribute("aria-label", "Send message");
+  sendButton.title = "Send message";
+  removeLastStatus();
+  messageInput.focus();
+}
+
 async function sendMessage() {
   if (isLoading) return;
   const message = messageInput.value.trim();
@@ -323,7 +340,10 @@ async function sendMessage() {
 
   isLoading = true;
   messageInput.disabled = true;
-  sendButton.disabled = true;
+  sendButton.disabled = false;
+  sendButton.classList.add("stop-generating");
+  sendButton.setAttribute("aria-label", "Stop generating message");
+  sendButton.title = "Stop generating";
   messageInput.value = "";
   messageInput.blur();
 
@@ -339,12 +359,15 @@ async function sendMessage() {
   let fullAnswer = "";
 
   try {
+    const abortController = new AbortController();
+    window.__strataAbortController = abortController;
     const response = await fetch(API_BASE + "/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },
+      signal: abortController.signal,
       body: JSON.stringify({
         message,
         session_id: sessionId,
@@ -483,10 +506,17 @@ async function sendMessage() {
       assistantGroup.classList.add("message-complete");
     }
   } catch (error) {
-    console.error("Chat request failed:", error);
-    removeLastStatus();
-    addMessage("assistant", "An error occurred while contacting Strata.");
+    if (error?.name === "AbortError") {
+      console.log("Strata generation stopped by user.");
+    } else {
+      console.error("Chat request failed:", error);
+      removeLastStatus();
+      addMessage("assistant", "An error occurred while contacting Strata.");
+    }
   } finally {
+    if (window.__strataAbortController === abortController) {
+      window.__strataAbortController = null;
+    }
     resetInput();
     clearAttachment();
   }
@@ -604,6 +634,9 @@ function resetInput() {
   isLoading = false;
   messageInput.disabled = false;
   sendButton.disabled = false;
+  sendButton.classList.remove("stop-generating");
+  sendButton.setAttribute("aria-label", "Send message");
+  sendButton.title = "Send message";
 }
 
 function renderAttachmentPreview() {
@@ -700,6 +733,10 @@ fileInput?.addEventListener("change", async () => {
 
 chatForm.addEventListener("submit", (event) => {
   event.preventDefault();
+  if (isLoading) {
+    stopGeneration();
+    return;
+  }
   sendMessage();
 });
 
