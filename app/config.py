@@ -2,9 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-env_path = Path(__file__).parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
+# Load environment variables from .env file if it exists
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 # API Configuration
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-8b")
@@ -20,6 +19,4 @@ PORT = int(os.getenv("PORT", "8000"))
 # Validate
 if not GEMINI_API_KEY:
     import warnings
-    warnings.warn(
-        "GEMINI_API_KEY is not set. Get one free at https://ai.google.dev/"
-    )
+    warnings.warn("GEMINI_API_KEY is not set. Get one from https://ai.google.dev/")
