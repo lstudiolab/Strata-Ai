@@ -24,7 +24,9 @@ class Memory:
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
                     first_question TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    memory_summary TEXT NOT NULL DEFAULT '',
+                    memory_summary_through INTEGER NOT NULL DEFAULT 0
                 )
                 """
             )
@@ -40,6 +42,12 @@ class Memory:
                 )
                 """
             )
+            columns = {row[1] for row in db.execute("PRAGMA table_info(sessions)").fetchall()}
+            if "memory_summary" not in columns:
+                db.execute("ALTER TABLE sessions ADD COLUMN memory_summary TEXT NOT NULL DEFAULT ''")
+            if "memory_summary_through" not in columns:
+                db.execute("ALTER TABLE sessions ADD COLUMN memory_summary_through INTEGER NOT NULL DEFAULT 0")
+
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id, id)"
             )
@@ -114,6 +122,61 @@ class Memory:
                 return int(row[0] or 0) if row else 0
         except sqlite3.Error:
             logger.exception("Failed to count messages")
+            return 0
+
+    def memory_summary(self, session_id: str) -> Tuple[str, int]:
+        try:
+            with self._connect() as db:
+                row = db.execute(
+                    "SELECT memory_summary, memory_summary_through FROM sessions WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+                return (str(row[0] or ""), int(row[1] or 0)) if row else ("", 0)
+        except sqlite3.Error:
+            logger.exception("Failed to get memory summary")
+            return "", 0
+
+    def update_memory_summary(self, session_id: str, summary: str, through_id: int) -> bool:
+        try:
+            with self._connect() as db:
+                db.execute(
+                    "UPDATE sessions SET memory_summary = ?, memory_summary_through = ? WHERE id = ?",
+                    (summary, int(through_id), session_id),
+                )
+                db.commit()
+            return True
+        except sqlite3.Error:
+            logger.exception("Failed to update memory summary")
+            return False
+
+    def history_after(self, session_id: str, after_id: int, limit: int = 200) -> List[Tuple[int, str, str]]:
+        try:
+            with self._connect() as db:
+                rows = db.execute(
+                    """
+                    SELECT id, role, content
+                    FROM messages
+                    WHERE session_id = ? AND id > ?
+                    ORDER BY id ASC
+                    LIMIT ?
+                    """,
+                    (session_id, int(after_id), max(1, int(limit))),
+                ).fetchall()
+                return [(int(row[0]), row[1], row[2]) for row in rows]
+        except sqlite3.Error:
+            logger.exception("Failed to read messages after summary")
+            return []
+
+    def latest_message_id(self, session_id: str) -> int:
+        try:
+            with self._connect() as db:
+                row = db.execute(
+                    "SELECT COALESCE(MAX(id), 0) FROM messages WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()
+                return int(row[0] or 0) if row else 0
+        except sqlite3.Error:
+            logger.exception("Failed to get latest message id")
             return 0
 
     def list_sessions(self, limit: int = 50) -> List[dict]:
