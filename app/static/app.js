@@ -1,6 +1,6 @@
 let isLoading = false;
 let sessionId = localStorage.getItem("strata_session_id");
-let currentModel = "default";
+let currentModel = "strata";
 
 const messagesContainer = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
@@ -17,6 +17,26 @@ if (!sessionId) {
   localStorage.setItem("strata_session_id", sessionId);
 }
 
+function scrollToActive(group, behavior = "smooth") {
+  if (!group) return;
+
+  requestAnimationFrame(() => {
+    group.scrollIntoView({
+      behavior,
+      block: "start",
+    });
+  });
+}
+
+function scrollToBottom(behavior = "smooth") {
+  requestAnimationFrame(() => {
+    messagesContainer.scrollTo({
+      top: messagesContainer.scrollHeight,
+      behavior,
+    });
+  });
+}
+
 function addMessage(role, text, isStatus = false) {
   const group = document.createElement("div");
   group.className = "message-group " + role;
@@ -28,7 +48,11 @@ function addMessage(role, text, isStatus = false) {
 
   group.appendChild(msg);
   messagesContainer.appendChild(group);
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  // New conversations are anchored to the current exchange rather than
+  // leaving older messages in the main reading position.
+  scrollToActive(group);
+
   return msg;
 }
 
@@ -61,7 +85,12 @@ async function loadModels() {
       option.textContent = model.name;
       modelSelect.appendChild(option);
     }
+
     modelSelect.value = currentModel;
+    if (modelSelect.value !== currentModel && modelSelect.options.length) {
+      currentModel = modelSelect.options[0].value;
+      modelSelect.value = currentModel;
+    }
   } catch (error) {
     console.warn("Could not load models:", error);
   }
@@ -78,9 +107,14 @@ async function sendMessage() {
   sendButton.disabled = true;
   messageInput.value = "";
 
-  addMessage("user", message);
+  const userMessage = addMessage("user", message);
+
+  // Put the active exchange at the reading position. Older messages remain
+  // in the conversation history, but are naturally pushed above the viewport.
+  scrollToActive(userMessage.parentElement);
 
   let assistantMessage = null;
+  let assistantGroup = null;
   let fullAnswer = "";
 
   try {
@@ -141,18 +175,25 @@ async function sendMessage() {
 
           if (!assistantMessage) {
             assistantMessage = addMessage("assistant", "");
+            assistantGroup = assistantMessage.parentElement;
           }
 
           assistantMessage.textContent = fullAnswer;
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+          // Keep the live answer in view while it streams without snapping
+          // the whole conversation back to the very bottom.
+          scrollToActive(assistantGroup, "auto");
         } else if (payload.type === "answer") {
           removeLastStatus();
 
           if (!assistantMessage) {
             assistantMessage = addMessage("assistant", payload.message || "");
+            assistantGroup = assistantMessage.parentElement;
           } else {
             assistantMessage.textContent = payload.message || fullAnswer;
           }
+
+          scrollToActive(assistantGroup, "smooth");
         } else if (payload.type === "error") {
           removeLastStatus();
           addMessage("assistant", payload.message || "The AI request failed.");
