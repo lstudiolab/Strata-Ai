@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#eef3f8" />
     <title>Strata AI</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
@@ -11,12 +12,13 @@
       <header class="header">
         <div class="header-content">
           <div class="logo-section">
-            <div class="logo">⚡</div>
+            <div class="logo" aria-hidden="true"></div>
             <h1>Strata</h1>
           </div>
+
           <div class="model-selector">
             <label for="modelSelect">Model</label>
-            <select id="modelSelect" class="model-dropdown">
+            <select id="modelSelect" class="model-dropdown" aria-label="Choose model">
               <option value="default">Default</option>
               <option value="creative">Creative</option>
               <option value="analytical">Analytical</option>
@@ -26,16 +28,23 @@
         </div>
       </header>
 
-      <main class="chat-container">
-        <div id="messages" class="messages"></div>
+      <main class="chat-container" aria-label="Strata conversation">
+        <div id="messages" class="messages" aria-live="polite"></div>
       </main>
 
       <div class="input-container">
-        <div class="input-wrapper">
-          <input id="messageInput" class="message-input" type="text" placeholder="Ask Strata anything..." autocomplete="off" />
-          <button id="sendButton" class="send-button" type="button">➤</button>
-        </div>
-        <p class="footer-text">Strata can make mistakes. Always verify important information.</p>
+        <form class="input-wrapper" id="chatForm">
+          <input
+            id="messageInput"
+            class="message-input"
+            type="text"
+            placeholder="Message Strata"
+            autocomplete="off"
+            aria-label="Message Strata"
+          />
+          <button id="sendButton" class="send-button" type="submit" aria-label="Send message">↑</button>
+        </form>
+        <p class="footer-text">Strata can make mistakes. Verify important information.</p>
       </div>
     </div>
 
