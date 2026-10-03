@@ -1,4 +1,4 @@
-"""Groq client helpers.
+"""Groq agent client helpers.
 
 The existing GEMINI_API_KEY environment variable is intentionally retained
 for deployment compatibility. Its value is treated as the Groq API key.
