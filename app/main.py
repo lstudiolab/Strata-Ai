@@ -196,12 +196,10 @@ async def chat(req: Request):
             system_prompt = load_instructions()
             tool_events: asyncio.Queue = asyncio.Queue()
 
-            await tool_events.put({"message": "Understanding your message..."})
-            try:
-                corrected_message = await client.correct_message(message)
-            except Exception:
-                logger.exception("Message correction failed")
-                corrected_message = message
+            # Message understanding is handled inside the main Strata request.
+            # Do not spend a second API request on a separate correction pass; doing
+            # so can exhaust request-rate limits and cause later messages to fail.
+            corrected_message = message
 
             if pasted_text:
                 system_prompt += (
