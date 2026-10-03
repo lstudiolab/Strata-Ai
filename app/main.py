@@ -45,7 +45,7 @@ def get_default_instructions() -> str:
 
 
 def load_instructions() -> str:
-    path = INSTRUCTIONS_DIR / "strata.txt"
+    path = INSTRUCTIONS_DIR / "strata.md"
     if path.is_file():
         text = path.read_text(encoding="utf-8").strip()
         if text:
@@ -93,6 +93,22 @@ async def get_models():
                 "model": model_name,
             }
         ]
+    }
+
+
+@app.get("/api/conversations")
+async def get_conversations():
+    return {"conversations": mem.list_sessions()}
+
+
+@app.get("/api/conversations/{session_id}")
+async def get_conversation(session_id: str):
+    return {
+        "session_id": session_id,
+        "messages": [
+            {"role": role, "content": content}
+            for role, content in mem.conversation(session_id)
+        ],
     }
 
 
