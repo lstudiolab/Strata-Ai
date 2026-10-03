@@ -170,6 +170,9 @@ async def chat(req: Request):
             model_name = await client.highest_priced_model()
             system_prompt = load_instructions()
 
+            await tool_events.put({"message": "Understanding your message..."})
+            corrected_message = await client.correct_message(message)
+
             if pasted_text:
                 system_prompt += (
                     "\n\nA pasted-text tool is available for this request. "
@@ -179,6 +182,15 @@ async def chat(req: Request):
                 )
 
             messages = make_messages(history, first_question, message)
+            if corrected_message != message:
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Message understanding correction (use this only to clarify the "
+                        "previous user message; preserve the user's original intent): "
+                        + corrected_message
+                    ),
+                })
             tool_events: asyncio.Queue = asyncio.Queue()
 
             async def on_tool(name: str, round_number: int):
@@ -189,6 +201,9 @@ async def chat(req: Request):
                     "format_json": "Formatting the JSON...",
                     "browser_search": "Searching the web...",
                     "code_interpreter": "Running code...",
+                    "search_web": "Searching the web...",
+                    "deep_research": "Doing deep research...",
+                    "study": "Building a study session...",
                 }
                 await tool_events.put({
                     "message": labels.get(name, f"Using {name}...")
