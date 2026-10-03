@@ -157,8 +157,8 @@ async def chat(req: Request):
     image_data = str(body.get("image_data", "") or "").strip()
     attachment_type = str(body.get("attachment_type", "") or "").strip()
 
-    if not message:
-        return JSONResponse({"error": "Message is required."}, status_code=400)
+    if not message and not image_data:
+        return JSONResponse({"error": "Message or image attachment is required."}, status_code=400)
 
     # Keep user-supplied context bounded so attachments cannot overwhelm the model.
     pasted_text = pasted_text[:120000]
@@ -173,7 +173,7 @@ async def chat(req: Request):
     session_id = str(body.get("session_id") or uuid.uuid4())
     first_question = mem.first(session_id)
     if not first_question:
-        first_question = message
+        first_question = message or str(body.get("attachment_name", "Image attachment"))
         mem.start(session_id, first_question)
 
     history = mem.history(session_id)
