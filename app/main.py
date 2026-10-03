@@ -218,7 +218,7 @@ async def chat(req: Request):
             yield f"data: {json.dumps({'type': 'done'})}\\n\\n"
         except Exception as exc:
             logger.exception("Chat generation failed")
-            safe_error = str(exc).strip().replace("\\n", " ")[:240]
+            safe_error = str(exc).strip().replace("\n", " ")[:240]
             yield f"data: {json.dumps({'type': 'error', 'message': f'Strata could not complete the request: {safe_error}'})}\\n\\n"
 
     return StreamingResponse(
