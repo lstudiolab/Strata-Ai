@@ -89,7 +89,7 @@ select {
   font-size: 14px;
   font-weight: 700;
   background: var(--accent);
-  box-shadow: 0 5px 18px rgba(105, 119, 255, 0.18);
+  box-shadow: none;
 }
 
 .logo::after {
@@ -165,6 +165,8 @@ select {
 
 .message-group.assistant {
   justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .message {
