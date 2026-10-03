@@ -102,3 +102,38 @@ class Memory:
         except sqlite3.Error:
             logger.exception("Failed to read history")
             return []
+
+
+    def list_sessions(self, limit: int = 50) -> List[dict]:
+        try:
+            with self._connect() as db:
+                rows = db.execute(
+                    """
+                    SELECT
+                        s.id,
+                        s.first_question,
+                        s.created_at,
+                        COUNT(m.id) AS message_count
+                    FROM sessions AS s
+                    LEFT JOIN messages AS m ON m.session_id = s.id
+                    GROUP BY s.id
+                    ORDER BY s.created_at DESC
+                    LIMIT ?
+                    """,
+                    (max(1, min(int(limit), 100)),),
+                ).fetchall()
+                return [
+                    {
+                        "id": row[0],
+                        "title": row[1],
+                        "created_at": row[2],
+                        "message_count": row[3],
+                    }
+                    for row in rows
+                ]
+        except sqlite3.Error:
+            logger.exception("Failed to list sessions")
+            return []
+
+    def conversation(self, session_id: str, limit: int = 100) -> List[Tuple[str, str]]:
+        return self.history(session_id, limit=limit)
