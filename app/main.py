@@ -130,8 +130,13 @@ async def chat(req: Request):
         return JSONResponse({"error": "Request body must be a JSON object."}, status_code=400)
 
     message = str(body.get("message", "")).strip()
+    pasted_text = str(body.get("pasted_text", "") or "").strip()
+
     if not message:
         return JSONResponse({"error": "Message is required."}, status_code=400)
+
+    # Keep pasted context bounded so a browser paste cannot overwhelm the model.
+    pasted_text = pasted_text[:120000]
 
     session_id = str(body.get("session_id") or uuid.uuid4())
     first_question = mem.first(session_id)
@@ -143,28 +148,61 @@ async def chat(req: Request):
     mem.add(session_id, "user", message)
 
     async def stream_response():
-        stages = (
-            "Analyzing your question...",
-            "Checking relevant knowledge...",
-            "Formulating the answer...",
-        )
-        for stage in stages:
-            yield f"data: {json.dumps({'type': 'status', 'message': stage})}\n\n"
-            await asyncio.sleep(0.02)
+        yield f"data: {json.dumps({'type': 'status', 'message': 'Thinking...'})}\n\n"
 
         try:
             model_name = await client.highest_priced_model()
             system_prompt = load_instructions()
+
+            if pasted_text:
+                system_prompt += (
+                    "\n\nA pasted-text tool is available for this request. "
+                    "Use get_pasted_text when the user's task depends on the "
+                    "pasted material. Do not claim to have read it unless you "
+                    "actually call the tool."
+                )
+
             messages = make_messages(history, first_question, message)
+            tool_events: asyncio.Queue = asyncio.Queue()
 
-            answer_parts = []
-            async for text in client.stream_chat(model_name, system_prompt, messages):
-                answer_parts.append(text)
-                yield f"data: {json.dumps({'type': 'delta', 'message': text})}\n\n"
+            async def on_tool(name: str, round_number: int):
+                labels = {
+                    "get_pasted_text": "Reading the pasted text...",
+                }
+                await tool_events.put({
+                    "message": labels.get(name, f"Using {name}...")
+                })
 
-            answer = "".join(answer_parts).strip()
+            agent_task = asyncio.create_task(
+                client.run_agent(
+                    model_name,
+                    system_prompt,
+                    messages,
+                    pasted_text=pasted_text,
+                    on_tool=on_tool,
+                )
+            )
+
+            while not agent_task.done():
+                try:
+                    event = await asyncio.wait_for(tool_events.get(), timeout=0.15)
+                    yield f"data: {json.dumps({'type': 'status', 'message': event['message']})}\n\n"
+                except asyncio.TimeoutError:
+                    continue
+
+            while not tool_events.empty():
+                event = await tool_events.get()
+                yield f"data: {json.dumps({'type': 'status', 'message': event['message']})}\n\n"
+
+            answer = await agent_task
             if not answer:
                 answer = "I couldn't generate a response. Please try again."
+
+            # Keep the clean streaming feel in the UI after agent/tool work.
+            chunk_size = 48
+            for index in range(0, len(answer), chunk_size):
+                yield f"data: {json.dumps({'type': 'delta', 'message': answer[index:index + chunk_size]})}\n\n"
+                await asyncio.sleep(0.005)
 
             mem.add(session_id, "model", answer)
             yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\n\n"
