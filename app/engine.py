@@ -19,6 +19,49 @@ DEFAULT_MODEL = "openai/gpt-oss-120b"
 class GroqClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
+        self.rate_limits = {
+            "requests": {"remaining": None, "limit": None, "reset": None},
+            "tokens": {"remaining": None, "limit": None, "reset": None},
+        }
+
+    def _record_rate_limits(self, response) -> None:
+        def number(name: str):
+            value = response.headers.get(name)
+            try:
+                return int(value) if value is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        self.rate_limits["requests"] = {
+            "remaining": number("x-ratelimit-remaining-requests"),
+            "limit": number("x-ratelimit-limit-requests"),
+            "reset": response.headers.get("x-ratelimit-reset-requests"),
+        }
+        self.rate_limits["tokens"] = {
+            "remaining": number("x-ratelimit-remaining-tokens"),
+            "limit": number("x-ratelimit-limit-tokens"),
+            "reset": response.headers.get("x-ratelimit-reset-tokens"),
+        }
+
+    def credit_status(self) -> dict:
+        def percentage(bucket):
+            remaining = bucket["remaining"]
+            limit = bucket["limit"]
+            if remaining is None or limit is None or limit <= 0:
+                return None
+            return round(max(0.0, min(100.0, remaining / limit * 100.0)), 1)
+
+        return {
+            "requests": {
+                **self.rate_limits["requests"],
+                "remaining_percent": percentage(self.rate_limits["requests"]),
+            },
+            "tokens": {
+                **self.rate_limits["tokens"],
+                "remaining_percent": percentage(self.rate_limits["tokens"]),
+            },
+            "source": "Groq rate-limit headers",
+        }
 
     @property
     def configured(self) -> bool:
@@ -76,6 +119,7 @@ class GroqClient:
                 headers=self._headers(),
                 json=payload,
             ) as response:
+                self._record_rate_limits(response)
                 if response.status != 200:
                     detail = await response.text()
                     raise RuntimeError(f"Groq returned HTTP {response.status}: {detail[:400]}")
@@ -318,6 +362,7 @@ class GroqClient:
                     headers=self._headers(),
                     json=payload,
                 ) as response:
+                    self._record_rate_limits(response)
                     if response.status != 200:
                         detail = await response.text()
                         raise RuntimeError(
