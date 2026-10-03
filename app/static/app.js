@@ -16,8 +16,7 @@ const conversationList = document.getElementById("conversationList");
 const conversationClose = document.getElementById("conversationClose");
 const drawerBackdrop = document.getElementById("drawerBackdrop");
 const newConversationButton = document.getElementById("newConversationButton");
-const memoryLimitText = document.getElementById("memoryLimitText");
-const MEMORY_LIMIT = 50;
+
 let selectedAttachment = null;
 let selectedAttachmentData = "";
 
@@ -304,13 +303,6 @@ function removeLastStatus() {
 
 async function sendMessage() {
   if (isLoading) return;
-  const currentMessageCount = messagesContainer.querySelectorAll(".message-group.user").length + messagesContainer.querySelectorAll(".message-group.assistant").length;
-  if (currentMessageCount >= MEMORY_LIMIT) {
-    addMessage("assistant", "This conversation has reached Strata’s memory limit of " + MEMORY_LIMIT + " messages. Start a new conversation to continue.");
-    openConversationDrawer();
-    return;
-  }
-
   const message = messageInput.value.trim();
   const contextText = "";
   if (!message && !selectedAttachmentData) return;
@@ -456,7 +448,6 @@ function openSettings() {
   if (!settingsPanel) return;
   settingsPanel.classList.add("open");
   settingsPanel.setAttribute("aria-hidden", "false");
-  if (memoryLimitText) memoryLimitText.textContent = MEMORY_LIMIT + " messages per conversation";
 }
 
 function closeConversationDrawer() {
