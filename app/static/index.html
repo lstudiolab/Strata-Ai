@@ -15,7 +15,7 @@
             <span></span><span></span><span></span>
           </button>
           <h1>Strata</h1>
-          <button id="creditsButton" class="credits-button" type="button" aria-label="Show remaining credits" aria-expanded="false">
+          <button id="creditsButton" class="credits-button" type="button" aria-label="Show usage" aria-expanded="false">
             <span class="credits-orb"></span>
           </button>
         </div>
@@ -63,7 +63,8 @@
         </div>
 
         <form class="input-wrapper" id="chatForm">
-          <button id="contextButton" class="context-button" type="button" aria-label="Add text">+</button>
+          <button id="attachmentButton" class="context-button" type="button" aria-label="Add a photo or file">+</button>
+          <input id="fileInput" type="file" accept="image/*,.txt,.md,.json,.csv,.pdf" hidden />
           <input
             id="messageInput"
             class="message-input"
@@ -74,6 +75,7 @@
           />
           <button id="sendButton" class="send-button" type="submit" aria-label="Send message">↑</button>
         </form>
+        <div id="attachmentPreview" class="attachment-preview" hidden></div>
         <p class="footer-text">Strata can make mistakes. Verify important information.</p>
       </div>
     </div>
