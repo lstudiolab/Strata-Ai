@@ -336,7 +336,13 @@ async def chat(req: Request):
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as exc:
             logger.exception("Chat generation failed")
-            safe_error = str(exc).strip().replace("\n", " ")[:240]
+            safe_error = str(exc).strip().replace("\n", " ")[:400]
+            if "429" in safe_error or "rate limit" in safe_error.lower():
+                safe_error = (
+                    "Groq is temporarily rate-limiting this request. "
+                    "Strata waited and retried automatically, but the API quota is still busy. "
+                    "Please try again in a few seconds."
+                )
             yield f"data: {json.dumps({'type': 'error', 'message': f'Strata could not complete the request: {safe_error}'})}\n\n"
 
     return StreamingResponse(
