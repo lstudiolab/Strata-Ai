@@ -20,6 +20,7 @@ const newConversationButton = document.getElementById("newConversationButton");
 const creditsButton = document.getElementById("creditsButton");
 const creditsPanel = document.getElementById("creditsPanel");
 const creditsClose = document.getElementById("creditsClose");
+const creditsPercent = document.getElementById("creditsPercent");
 const requestsPercent = document.getElementById("requestsPercent");
 const requestsBar = document.getElementById("requestsBar");
 const requestsDetail = document.getElementById("requestsDetail");
@@ -295,6 +296,11 @@ async function loadCredits() {
     const tokens = data.tokens || {};
     updateCreditMeter(requestsPercent, requestsBar, requests.remaining_percent);
     updateCreditMeter(tokensPercent, tokensBar, tokens.remaining_percent);
+    if (creditsPercent) {
+      creditsPercent.textContent = requests.remaining_percent == null
+        ? "--"
+        : Math.round(Number(requests.remaining_percent)) + "%";
+    }
     requestsDetail.textContent = requests.remaining != null
       ? requests.remaining.toLocaleString() + " of " + requests.limit.toLocaleString() + " requests remaining"
       : "Send a message to measure this quota.";
