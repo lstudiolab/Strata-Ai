@@ -8,10 +8,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from google.genai import types
 
-from app.config import GEMINI_API_KEY, GEMINI_MODEL, HOST, PORT, DEBUG
+from app.config import GEMINI_API_KEY, GEMINI_MODEL, HOST, PORT
 from app.engine import client
 from app.memory import Memory
-from app.search import SearchEngine
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +88,6 @@ async def chat(req: Request):
     mem.add(session_id, "user", message)
 
     async def stream_response():
-        # Show thinking process
         thinking_steps = [
             ("🔍", "Analyzing your question..."),
             ("🌐", "Searching the web for latest information..."),
@@ -99,19 +97,18 @@ async def chat(req: Request):
         ]
 
         for emoji, step in thinking_steps:
-            yield f"data: {json.dumps({'type': 'status', 'message': step, 'emoji': emoji})}\n\n"
+            yield "data: " + json.dumps({"type": "status", "message": step, "emoji": emoji}) + "\n\n"
 
         try:
-            # Build conversation history
-            contents = [
-                types.Content(
-                    role="user" if role == "user" else "model",
-                    parts=[types.Part.from_text(text=text)],
+            contents = []
+            for role, text in history:
+                contents.append(
+                    types.Content(
+                        role="user" if role == "user" else "model",
+                        parts=[types.Part.from_text(text=text)],
+                    )
                 )
-                for role, text in history
-            ]
 
-            # Add current message with context
             contents.append(
                 types.Content(
                     role="user",
@@ -123,7 +120,6 @@ async def chat(req: Request):
                 )
             )
 
-            # Configure Gemini with tools
             config = types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.7,
@@ -133,7 +129,6 @@ async def chat(req: Request):
                 tools=[types.Tool(google_search=types.GoogleSearch())],
             )
 
-            # Generate response
             response = await client.aio.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=contents,
@@ -147,11 +142,11 @@ async def chat(req: Request):
             )
             mem.add(session_id, "model", answer)
 
-            yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\n\n"
+            yield "data: " + json.dumps({"type": "answer", "message": answer}) + "\n\n"
         except Exception as exc:
             error_message = f"An error occurred: {str(exc)[:100]}"
             logger.error(f"Chat error: {exc}")
-            yield f"data: {json.dumps({'type': 'error', 'message': error_message})}\n\n"
+            yield "data: " + json.dumps({"type": "error", "message": error_message}) + "\n\n"
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
 
@@ -159,4 +154,4 @@ async def chat(req: Request):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host=HOST, port=PORT, reload=DEBUG)
+    uvicorn.run(app, host=HOST, port=PORT, reload=False)

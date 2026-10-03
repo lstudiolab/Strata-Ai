@@ -16,7 +16,6 @@ DB_PATH = os.getenv("STRATA_MEMORY_DB", "data/strata.db")
 # Server Configuration
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
-DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # Validate
 if not GEMINI_API_KEY:
