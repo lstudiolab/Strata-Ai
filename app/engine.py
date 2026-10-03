@@ -5,6 +5,7 @@ for deployment compatibility. Its value is treated as the Groq API key.
 """
 
 import ast
+import asyncio
 import json
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -719,7 +720,9 @@ class GroqClient:
                     "model": model or DEFAULT_MODEL,
                     "messages": working,
                     "stream": False,
-                    "max_completion_tokens": 4096,
+                    # Keep the normal answer generous, but reserve enough of the
+                    # free-tier token budget for the prompt itself and reasoning.
+                    "max_completion_tokens": 4096 if sum(len(str(m.get("content") or "")) for m in working) < 14000 else 2048,
                     "temperature": 0.7,
                     "top_p": 0.9,
                     "reasoning_effort": "high",
