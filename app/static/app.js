@@ -362,13 +362,15 @@ async function sendMessage() {
     let buffer = "";
 
     const processEvent = (event) => {
-      const dataLine = event
+      const dataLines = event
+        .replace(/\r/g, "")
         .split("\n")
-        .find((line) => line.startsWith("data:"));
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).replace(/^\s?/, ""));
 
-      if (!dataLine) return;
+      if (!dataLines.length) return;
 
-      const raw = dataLine.replace(/^data:\s?/, "").trim();
+      const raw = dataLines.join("\n").trim();
       if (!raw) return;
 
       try {
@@ -381,9 +383,12 @@ async function sendMessage() {
           } else {
             addMessage("assistant", payload.message || "Thinking...", true);
           }
-        } else if (payload.type === "delta") {
+          return;
+        }
+
+        if (payload.type === "delta") {
           removeLastStatus();
-          fullAnswer += payload.message || "";
+          fullAnswer += String(payload.message || "");
 
           if (!assistantMessage) {
             assistantMessage = addMessage("assistant", "");
@@ -392,23 +397,42 @@ async function sendMessage() {
 
           renderAssistantMessage(assistantMessage, fullAnswer);
           scrollToActive(assistantGroup, "auto");
-        } else if (payload.type === "answer") {
+          return;
+        }
+
+        if (payload.type === "answer") {
           removeLastStatus();
+          const finalAnswer = String(payload.message || fullAnswer || "");
 
           if (!assistantMessage) {
-            assistantMessage = addMessage("assistant", payload.message || "");
+            assistantMessage = addMessage("assistant", finalAnswer);
             assistantGroup = assistantMessage.parentElement;
           } else {
-            renderAssistantMessage(assistantMessage, payload.message || fullAnswer);
+            fullAnswer = finalAnswer;
+            renderAssistantMessage(assistantMessage, finalAnswer);
+          }
+
+          if (!finalAnswer) {
+            renderAssistantMessage(assistantMessage, "I couldn't generate a response. Please try again.");
           }
 
           scrollToActive(assistantGroup, "smooth");
-        } else if (payload.type === "error") {
+          return;
+        }
+
+        if (payload.type === "error") {
           removeLastStatus();
-          addMessage("assistant", payload.message || "The AI request failed.");
+          if (!assistantMessage) {
+            addMessage("assistant", payload.message || "The AI request failed.");
+          } else {
+            renderAssistantMessage(
+              assistantMessage,
+              payload.message || "The AI request failed."
+            );
+          }
         }
       } catch (error) {
-        console.warn("SSE parse error:", error);
+        console.warn("SSE parse error:", error, raw.slice(0, 300));
       }
     };
 
@@ -427,6 +451,16 @@ async function sendMessage() {
 
     buffer += decoder.decode();
     if (buffer.trim()) processEvent(buffer);
+
+    // The server's final answer event is authoritative. If a proxy/client
+    // dropped a final SSE boundary but the stream still contained answer text,
+    // make sure the user never ends up with a missing assistant message.
+    if (!assistantMessage && fullAnswer.trim()) {
+      assistantMessage = addMessage("assistant", fullAnswer);
+      assistantGroup = assistantMessage.parentElement;
+    } else if (assistantMessage && fullAnswer.trim()) {
+      renderAssistantMessage(assistantMessage, fullAnswer);
+    }
   } catch (error) {
     console.error("Chat request failed:", error);
     removeLastStatus();
