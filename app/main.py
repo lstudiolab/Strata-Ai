@@ -52,18 +52,7 @@ AVAILABLE_MODELS = load_available_models()
 
 
 def get_default_instructions() -> str:
-    return """
-You are Strata, a helpful and intelligent AI assistant.
-
-Behavior Guidelines:
-- Be conversational, clear, and direct.
-- Provide accurate, evidence-based responses.
-- Break down complex topics step-by-step.
-- For code requests, provide clean, well-commented examples.
-- Be concise but thorough.
-- Adapt your tone to the user's style.
-- Always be respectful and helpful.
-""".strip()
+    return "You are Strata, a helpful and intelligent AI assistant."
 
 
 def load_instructions(model_type: str = "default") -> str:
@@ -184,5 +173,4 @@ async def chat(req: Request):
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host=HOST, port=PORT, reload=False)
