@@ -111,27 +111,39 @@ class GroqClient:
             "model": model,
             "messages": messages,
             "stream": False,
-            "max_tokens": max_tokens,
+            "max_completion_tokens": max_tokens,
             "temperature": temperature,
             "top_p": 0.9,
             "reasoning_effort": "low",
             "tool_choice": tool_choice,
+            "service_tier": "auto",
         }
         if tools:
             payload["tools"] = tools
 
         timeout = aiohttp.ClientTimeout(total=180, sock_connect=30, sock_read=None)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
-                f"{GROQ_BASE_URL}/chat/completions",
-                headers=self._headers(),
-                json=payload,
-            ) as response:
-                self._record_rate_limits(response)
-                if response.status != 200:
-                    detail = await response.text()
-                    raise RuntimeError(f"Groq returned HTTP {response.status}: {detail[:400]}")
-                return await response.json()
+            for attempt in range(3):
+                async with session.post(
+                    f"{GROQ_BASE_URL}/chat/completions",
+                    headers=self._headers(),
+                    json=payload,
+                ) as response:
+                    self._record_rate_limits(response)
+                    if response.status == 429 and attempt < 2:
+                        retry_after = response.headers.get("retry-after")
+                        try:
+                            delay = max(1.0, min(30.0, float(retry_after)))
+                        except (TypeError, ValueError):
+                            delay = 2.0
+                        await asyncio.sleep(delay)
+                        continue
+                    if response.status != 200:
+                        detail = await response.text()
+                        raise RuntimeError(f"Groq returned HTTP {response.status}: {detail[:400]}")
+                    return await response.json()
+
+        raise RuntimeError("Groq request failed after retries.")
 
     async def correct_message(self, message: str) -> str:
         """Normalize unclear user wording without changing its intended request."""
@@ -696,15 +708,23 @@ class GroqClient:
         timeout = aiohttp.ClientTimeout(total=180, sock_connect=30, sock_read=None)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             for round_number in range(10):
+                import logging
+                logging.getLogger("strata").info(
+                    "Groq API request: model=%s round=%d messages=%d",
+                    model or DEFAULT_MODEL,
+                    round_number + 1,
+                    len(working),
+                )
                 payload = {
                     "model": model or DEFAULT_MODEL,
                     "messages": working,
                     "stream": False,
-                    "max_tokens": 12000,
+                    "max_completion_tokens": 4096,
                     "temperature": 0.7,
                     "top_p": 0.9,
                     "reasoning_effort": "high",
                     "tool_choice": "auto",
+                    "service_tier": "auto",
                 }
                 if tools:
                     payload["tools"] = tools
@@ -715,6 +735,19 @@ class GroqClient:
                     json=payload,
                 ) as response:
                     self._record_rate_limits(response)
+                    if response.status == 429:
+                        detail = await response.text()
+                        retry_after = response.headers.get("retry-after")
+                        try:
+                            delay = max(1.0, min(30.0, float(retry_after)))
+                        except (TypeError, ValueError):
+                            delay = 2.0
+                        if round_number < 9:
+                            await asyncio.sleep(delay)
+                            continue
+                        raise RuntimeError(
+                            f"Groq rate limit reached after retries: {detail[:400]}"
+                        )
                     if response.status != 200:
                         detail = await response.text()
                         raise RuntimeError(
