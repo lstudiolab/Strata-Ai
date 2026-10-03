@@ -186,7 +186,7 @@ async def chat(req: Request):
             "Formulating the answer...",
         )
         for stage in stages:
-            yield f"data: {json.dumps({'type': 'status', 'message': stage})}\\n\\n"
+            yield f"data: {json.dumps({'type': 'status', 'message': stage})}\n\n"
             await asyncio.sleep(0.02)
 
         try:
@@ -207,19 +207,19 @@ async def chat(req: Request):
                 if not text:
                     continue
                 answer_parts.append(text)
-                yield f"data: {json.dumps({'type': 'delta', 'message': text})}\\n\\n"
+                yield f"data: {json.dumps({'type': 'delta', 'message': text})}\n\n"
 
             answer = "".join(answer_parts).strip()
             if not answer:
                 answer = "I couldn't generate a response. Please try again."
 
             mem.add(session_id, "model", answer)
-            yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\\n\\n"
-            yield f"data: {json.dumps({'type': 'done'})}\\n\\n"
+            yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as exc:
             logger.exception("Chat generation failed")
             safe_error = str(exc).strip().replace("\n", " ")[:240]
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Strata could not complete the request: {safe_error}'})}\\n\\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Strata could not complete the request: {safe_error}'})}\n\n"
 
     return StreamingResponse(
         stream_response(),
