@@ -291,6 +291,8 @@ function addMessage(role, text, isStatus = false, attachment = null, completed =
 
   messagesContainer.appendChild(group);
   group.classList.add("message-enter");
+  if (role === "user" && !isStatus) group.classList.add("message-sent");
+  if (role === "assistant" && isStatus) group.classList.add("generating");
   scrollToActive(group);
 
   return msg;
@@ -300,6 +302,7 @@ function updateLastStatus(text) {
   const statuses = messagesContainer.querySelectorAll(".message.status");
   if (statuses.length > 0) {
     statuses[statuses.length - 1].textContent = text;
+    statuses[statuses.length - 1].parentElement.classList.add("generating");
   }
 }
 
@@ -467,9 +470,11 @@ async function sendMessage() {
     if (!assistantMessage && fullAnswer.trim()) {
       assistantMessage = addMessage("assistant", fullAnswer);
       assistantGroup = assistantMessage.parentElement;
+      assistantGroup.classList.remove("generating");
       addResponseActions(assistantGroup, assistantMessage);
       assistantGroup.classList.add("message-complete");
     } else if (assistantMessage && fullAnswer.trim()) {
+      assistantGroup.classList.remove("generating");
       renderAssistantMessage(assistantMessage, fullAnswer);
       addResponseActions(assistantGroup, assistantMessage);
       assistantGroup.classList.add("message-complete");
