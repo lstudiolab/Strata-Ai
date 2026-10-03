@@ -439,6 +439,93 @@ async function sendMessage() {
   }
 }
 
+
+function closeSettings() {
+  if (!settingsPanel) return;
+  settingsPanel.classList.remove("open");
+  settingsPanel.setAttribute("aria-hidden", "true");
+}
+
+function openSettings() {
+  if (!settingsPanel) return;
+  settingsPanel.classList.add("open");
+  settingsPanel.setAttribute("aria-hidden", "false");
+  if (memoryLimitText) memoryLimitText.textContent = MEMORY_LIMIT + " messages per conversation";
+}
+
+function closeConversationDrawer() {
+  if (!conversationDrawer) return;
+  conversationDrawer.classList.remove("open");
+  conversationDrawer.setAttribute("aria-hidden", "true");
+  drawerBackdrop?.classList.remove("open");
+}
+
+function openConversationDrawer() {
+  if (!conversationDrawer) return;
+  loadConversations();
+  conversationDrawer.classList.add("open");
+  conversationDrawer.setAttribute("aria-hidden", "false");
+  drawerBackdrop?.classList.add("open");
+}
+
+function startNewConversation() {
+  sessionId = "session_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+  localStorage.setItem("strata_session_id", sessionId);
+  messagesContainer.innerHTML = "";
+  clearAttachment();
+  addMessage("assistant", "Hi, I'm Strata. How can I help?");
+  closeConversationDrawer();
+}
+
+async function loadConversations() {
+  if (!conversationList) return;
+  conversationList.innerHTML = "Loading conversations...";
+  try {
+    const response = await fetch(API_BASE + "/api/conversations");
+    const data = await response.json();
+    const conversations = Array.isArray(data.conversations) ? data.conversations : [];
+    conversationList.innerHTML = "";
+    if (!conversations.length) {
+      conversationList.textContent = "No conversations yet.";
+      return;
+    }
+    conversations.forEach((conversation) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "conversation-item" + (conversation.id === sessionId ? " active" : "");
+      const title = document.createElement("span");
+      title.className = "conversation-title";
+      title.textContent = conversation.title || "New conversation";
+      const meta = document.createElement("span");
+      meta.className = "conversation-meta";
+      meta.textContent = (conversation.message_count || 0) + " messages";
+      button.append(title, meta);
+      button.addEventListener("click", () => loadConversation(conversation.id));
+      conversationList.appendChild(button);
+    });
+  } catch (_) {
+    conversationList.textContent = "Unable to load conversations.";
+  }
+}
+
+async function loadConversation(id) {
+  try {
+    const response = await fetch(API_BASE + "/api/conversations/" + encodeURIComponent(id));
+    if (!response.ok) throw new Error("load failed");
+    const data = await response.json();
+    sessionId = id;
+    localStorage.setItem("strata_session_id", sessionId);
+    messagesContainer.innerHTML = "";
+    for (const item of data.messages || []) {
+      addMessage(item.role === "user" ? "user" : "assistant", item.content || "");
+    }
+    if (!messagesContainer.children.length) addMessage("assistant", "Hi, I'm Strata. How can I help?");
+    closeConversationDrawer();
+  } catch (_) {
+    addMessage("assistant", "I couldn't load that conversation.");
+  }
+}
+
 function resetInput() {
   isLoading = false;
   messageInput.disabled = false;
