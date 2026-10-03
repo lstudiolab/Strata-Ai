@@ -104,6 +104,18 @@ class Memory:
             return []
 
 
+    def count_messages(self, session_id: str) -> int:
+        try:
+            with self._connect() as db:
+                row = db.execute(
+                    "SELECT COUNT(*) FROM messages WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()
+                return int(row[0] or 0) if row else 0
+        except sqlite3.Error:
+            logger.exception("Failed to count messages")
+            return 0
+
     def list_sessions(self, limit: int = 50) -> List[dict]:
         try:
             with self._connect() as db:
