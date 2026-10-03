@@ -363,3 +363,76 @@ select {
   font-size: 13px;
   font-weight: 600;
 }
+
+
+.header-content {
+  justify-content: center;
+}
+
+.context-panel {
+  width: min(820px, 100%);
+  margin: 0 auto 9px;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06);
+}
+
+.context-panel[hidden] {
+  display: none;
+}
+
+.context-input {
+  display: block;
+  width: 100%;
+  min-height: 110px;
+  max-height: 260px;
+  resize: vertical;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.context-input::placeholder {
+  color: #8e8e93;
+}
+
+.context-close {
+  margin-top: 7px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-blue);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.context-button {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #6e6e73;
+  background: #f2f2f7;
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.context-button:hover {
+  background: #e5e5ea;
+}
+
+.context-button:active {
+  transform: scale(0.94);
+}
