@@ -4,8 +4,9 @@ The existing GEMINI_API_KEY environment variable is intentionally retained
 for deployment compatibility. Its value is treated as the Groq API key.
 """
 
+import ast
 import json
-from typing import AsyncIterator
+from datetime import datetime, timezone
 
 import aiohttp
 
@@ -37,6 +38,23 @@ class GroqClient:
         """
         return DEFAULT_MODEL
 
+    @staticmethod
+    def _calculate(expression: str) -> str:
+        allowed = (
+            ast.Expression, ast.BinOp, ast.UnaryOp,
+            ast.Add, ast.Sub, ast.Mult, ast.Div,
+            ast.FloorDiv, ast.Mod, ast.Pow,
+            ast.USub, ast.UAdd, ast.Constant,
+        )
+        try:
+            tree = ast.parse(expression, mode="eval")
+            if any(not isinstance(node, allowed) for node in ast.walk(tree)):
+                return "Unsupported expression."
+            value = eval(compile(tree, "<calculator>", "eval"), {"__builtins__": {}}, {})
+            return str(value)
+        except Exception as exc:
+            return f"Calculation error: {exc}"
+
     async def run_agent(
         self,
         model: str,
@@ -53,6 +71,44 @@ class GroqClient:
         tools = [
             {"type": "browser_search"},
             {"type": "code_interpreter"},
+            {
+                "type": "function",
+                "function": {
+                    "name": "calculator",
+                    "description": "Safely evaluate a mathematical expression.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "expression": {"type": "string", "description": "Mathematical expression."}
+                        },
+                        "required": ["expression"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_current_time",
+                    "description": "Get the current UTC date and time in ISO 8601 format.",
+                    "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "format_json",
+                    "description": "Validate and pretty-print JSON.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "value": {"type": "string", "description": "JSON text."}
+                        },
+                        "required": ["value"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
         ]
         if pasted_text.strip():
             tools.append({
@@ -121,8 +177,24 @@ class GroqClient:
                     if on_tool is not None:
                         await on_tool(name, round_number + 1)
 
+                    arguments = {}
+                    try:
+                        arguments = json.loads(function.get("arguments") or "{}")
+                    except (TypeError, json.JSONDecodeError):
+                        arguments = {}
+
                     if name == "get_pasted_text":
                         result = pasted_text
+                    elif name == "get_current_time":
+                        result = datetime.now(timezone.utc).isoformat()
+                    elif name == "format_json":
+                        try:
+                            parsed = json.loads(str(arguments.get("value", "")))
+                            result = json.dumps(parsed, indent=2, ensure_ascii=False)
+                        except (TypeError, json.JSONDecodeError) as exc:
+                            result = f"Invalid JSON: {exc}"
+                    elif name == "calculator":
+                        result = self._calculate(str(arguments.get("expression", "")))
                     else:
                         result = "This tool is unavailable."
 
