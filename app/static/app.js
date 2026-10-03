@@ -8,30 +8,21 @@ const sendButton = document.getElementById("sendButton");
 const modelSelect = document.getElementById("modelSelect");
 
 if (!sessionId) {
-  sessionId = generateSessionId();
-}
-
-function generateSessionId() {
-  return "session_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+  sessionId = "session_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
 }
 
 function addMessage(role, text, isStatus = false) {
-  const messageGroup = document.createElement("div");
-  messageGroup.className = "message-group " + role;
+  const group = document.createElement("div");
+  group.className = "message-group " + role;
 
-  const message = document.createElement("div");
-  message.className = "message " + role;
-  if (isStatus) {
-    message.classList.add("status");
-  }
-  message.textContent = text;
+  const msg = document.createElement("div");
+  msg.className = "message " + role;
+  if (isStatus) msg.classList.add("status");
+  msg.textContent = text;
 
-  messageGroup.appendChild(message);
-  messagesContainer.appendChild(messageGroup);
-
-  setTimeout(() => {
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  }, 0);
+  group.appendChild(msg);
+  messagesContainer.appendChild(group);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function updateLastStatus(text) {
@@ -49,8 +40,8 @@ async function sendMessage() {
 
   isLoading = true;
   messageInput.disabled = true;
-  messageInput.value = "";
   sendButton.disabled = true;
+  messageInput.value = "";
 
   addMessage("user", message);
 
@@ -61,20 +52,20 @@ async function sendMessage() {
       body: JSON.stringify({
         message,
         session_id: sessionId,
-        model_type: currentModel
-      })
+        model_type: currentModel,
+      }),
     });
 
     if (!response.ok || !response.body) {
-      addMessage("assistant", "Failed to connect to the AI server. Please try again.");
-      resetInputState();
+      addMessage("assistant", "Failed to connect to the AI server.");
+      resetInput();
       return;
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let hasStatus = false;
+    let statusShown = false;
 
     while (true) {
       const { value, done } = await reader.read();
@@ -94,35 +85,35 @@ async function sendMessage() {
           const payload = JSON.parse(raw);
 
           if (payload.type === "status") {
-            if (!hasStatus) {
+            if (!statusShown) {
               addMessage("assistant", payload.message, true);
-              hasStatus = true;
+              statusShown = true;
             } else {
               updateLastStatus(payload.message);
             }
           } else if (payload.type === "answer") {
-            const last = messagesContainer.lastChild;
-            if (last && last.querySelector(".message.status")) {
-              last.remove();
+            const lastGroup = messagesContainer.lastElementChild;
+            if (lastGroup && lastGroup.querySelector(".message.status")) {
+              lastGroup.remove();
             }
             addMessage("assistant", payload.message);
           } else if (payload.type === "error") {
-            addMessage("assistant", payload.message);
+            addMessage("assistant", payload.message, false);
           }
-        } catch (error) {
-          console.error("Failed to parse response:", error);
+        } catch (err) {
+          console.error("Parse error:", err);
         }
       }
     }
-  } catch (error) {
-    addMessage("assistant", "An error occurred. Please try again.");
-    console.error("Send message error:", error);
+  } catch (err) {
+    addMessage("assistant", "An error occurred while contacting the AI.");
+    console.error(err);
   } finally {
-    resetInputState();
+    resetInput();
   }
 }
 
-function resetInputState() {
+function resetInput() {
   isLoading = false;
   messageInput.disabled = false;
   sendButton.disabled = false;
@@ -130,19 +121,17 @@ function resetInputState() {
 }
 
 sendButton.addEventListener("click", sendMessage);
-messageInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey && !isLoading) {
-    e.preventDefault();
+messageInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey && !isLoading) {
+    event.preventDefault();
     sendMessage();
   }
 });
 
-modelSelect.addEventListener("change", function () {
-  currentModel = this.value;
+modelSelect.addEventListener("change", (event) => {
+  currentModel = event.target.value;
 });
 
 window.addEventListener("load", () => {
   addMessage("assistant", "Hi! I'm Strata AI. How can I help you today?");
 });
-
-messageInput.focus();

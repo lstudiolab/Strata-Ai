@@ -1,7 +1,7 @@
 import asyncio
 import json
-import uuid
 import logging
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -31,24 +31,20 @@ mem = Memory("data/strata.db")
 
 
 def load_available_models():
-    """Dynamically load all available models from instruction files."""
     instructions_dir = Path(__file__).parent / "instructions"
     models = {}
 
     if instructions_dir.exists():
-        for file in instructions_dir.glob("*.txt"):
+        for file in sorted(instructions_dir.glob("*.txt")):
             model_name = file.stem
             models[model_name] = {
                 "model_id": "gemini-1.5-flash",
-                "name": model_name.capitalize()
+                "name": model_name.replace("_", " ").title(),
             }
-    
+
     if not models:
-        models["default"] = {
-            "model_id": "gemini-1.5-flash",
-            "name": "Default"
-        }
-    
+        models["default"] = {"model_id": "gemini-1.5-flash", "name": "Default"}
+
     return models
 
 
@@ -56,11 +52,21 @@ AVAILABLE_MODELS = load_available_models()
 
 
 def get_default_instructions() -> str:
-    return "You are Strata, a helpful and intelligent AI assistant."
+    return """
+You are Strata, a helpful and intelligent AI assistant.
+
+Behavior Guidelines:
+- Be conversational, clear, and direct.
+- Provide accurate, evidence-based responses.
+- Break down complex topics step-by-step.
+- For code requests, provide clean, well-commented examples.
+- Be concise but thorough.
+- Adapt your tone to the user's style.
+- Always be respectful and helpful.
+""".strip()
 
 
 def load_instructions(model_type: str = "default") -> str:
-    """Load system instructions from file based on model type."""
     instructions_file = Path(__file__).parent / "instructions" / f"{model_type}.txt"
     if instructions_file.exists():
         return instructions_file.read_text(encoding="utf-8").strip()
@@ -75,7 +81,6 @@ def home():
 
 @app.get("/api/models")
 def get_models():
-    """Return available AI models."""
     return {"models": list(AVAILABLE_MODELS.keys())}
 
 
@@ -92,9 +97,7 @@ def health():
 async def chat(req: Request):
     if not GEMINI_API_KEY or not client:
         return JSONResponse(
-            {
-                "error": "GEMINI_API_KEY is not configured. Set it in the environment or Render dashboard."
-            },
+            {"error": "GEMINI_API_KEY is not configured."},
             status_code=500,
         )
 
@@ -153,10 +156,9 @@ async def chat(req: Request):
                 max_output_tokens=2048,
             )
 
-            for i, stage in enumerate(thinking_stages):
+            for stage in thinking_stages:
                 yield "data: " + json.dumps({"type": "status", "message": stage}) + "\n\n"
-                if i < len(thinking_stages) - 1:
-                    await asyncio.sleep(0.05)
+                await asyncio.sleep(0.05)
 
             response = await client.aio.models.generate_content(
                 model="gemini-1.5-flash",
@@ -173,7 +175,7 @@ async def chat(req: Request):
 
             yield "data: " + json.dumps({"type": "answer", "message": answer}) + "\n\n"
         except Exception as exc:
-            error_message = f"An error occurred: {str(exc)[:100]}"
+            error_message = f"An error occurred: {str(exc)[:120]}"
             logger.error(f"Chat error: {exc}")
             yield "data: " + json.dumps({"type": "error", "message": error_message}) + "\n\n"
 
