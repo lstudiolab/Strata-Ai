@@ -377,7 +377,7 @@ async function loadConversation(id) {
     }
 
     if (!(data.messages || []).length) {
-      addMessage("assistant", "Hi! I'm Strata AI. How can I help you today?");
+      addMessage("assistant", "Hi, I'm Strata. How can I help?");
     }
 
     closeConversationDrawer();
@@ -392,7 +392,7 @@ function startNewConversation() {
   sessionId = "session_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
   localStorage.setItem("strata_session_id", sessionId);
   messagesContainer.innerHTML = "";
-  addMessage("assistant", "Hi! I'm Strata AI. How can I help you today?");
+  addMessage("assistant", "Hi, I'm Strata. How can I help?");
   closeConversationDrawer();
 }
 
