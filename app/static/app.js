@@ -5,6 +5,7 @@ let currentModel = "default";
 const messagesContainer = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 const sendButton = document.getElementById("sendButton");
+const chatForm = document.getElementById("chatForm");
 const modelSelect = document.getElementById("modelSelect");
 
 const API_BASE =
@@ -192,7 +193,10 @@ function resetInput() {
   messageInput.focus();
 }
 
-sendButton.addEventListener("click", sendMessage);
+chatForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  sendMessage();
+});
 
 messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !isLoading) {
