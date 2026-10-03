@@ -15,9 +15,29 @@
             <span></span><span></span><span></span>
           </button>
           <h1>Strata</h1>
-          <span class="header-spacer" aria-hidden="true"></span>
+          <button id="creditsButton" class="credits-button" type="button" aria-label="Show remaining credits" aria-expanded="false">
+            <span class="credits-orb"></span>
+          </button>
         </div>
       </header>
+
+      <aside id="creditsPanel" class="credits-panel" aria-hidden="true">
+        <div class="credits-header">
+          <div><h2>Usage</h2><p>Live Groq quota</p></div>
+          <button id="creditsClose" class="credits-close" type="button" aria-label="Close usage">×</button>
+        </div>
+        <div class="credit-meter">
+          <div class="credit-meter-top"><span>Requests remaining</span><strong id="requestsPercent">—</strong></div>
+          <div class="credit-track"><span id="requestsBar"></span></div>
+          <p id="requestsDetail">Send a message to measure your quota.</p>
+        </div>
+        <div class="credit-meter">
+          <div class="credit-meter-top"><span>Tokens remaining</span><strong id="tokensPercent">—</strong></div>
+          <div class="credit-track"><span id="tokensBar"></span></div>
+          <p id="tokensDetail">Measured from Groq's live response headers.</p>
+        </div>
+        <p class="credits-note">This measures API rate-limit capacity, not a dollar balance.</p>
+      </aside>
 
       <aside id="conversationDrawer" class="conversation-drawer" aria-hidden="true">
         <div class="drawer-header">
