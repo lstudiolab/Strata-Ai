@@ -117,7 +117,7 @@ class GroqClient:
             "top_p": 0.9,
             "reasoning_effort": "low",
             "tool_choice": tool_choice,
-            "service_tier": "auto",
+    
         }
         if tools:
             payload["tools"] = tools
@@ -727,7 +727,7 @@ class GroqClient:
                     "top_p": 0.9,
                     "reasoning_effort": "high",
                     "tool_choice": "auto",
-                    "service_tier": "auto",
+            
                 }
                 if tools:
                     payload["tools"] = tools
