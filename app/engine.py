@@ -29,6 +29,10 @@ TOOL_CATALOG = {
     "get_pasted_text": "Read text explicitly supplied by the user.",
     "analyze_image": "Analyze an uploaded image, including OCR and visual understanding.",
     "get_navigation_links": "Create navigation links for Apple Maps, Google Maps, and Waze.",
+    "open_webpage": "Read a public webpage for analysis.",
+    "get_weather": "Get current weather and forecasts for a location.",
+    "get_sports": "Get current sports scores, schedules, and standings.",
+    "get_stock_quote": "Get current public market information for a stock symbol.",
 }
 
 
@@ -249,6 +253,149 @@ class GroqClient:
         return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
 
 
+    async def open_webpage(self, url: str) -> str:
+        """Read a public webpage for analysis."""
+        url = str(url).strip()
+        if not url.startswith(("http://", "https://")):
+            return "A valid public http(s) URL is required."
+        timeout = aiohttp.ClientTimeout(total=30, sock_connect=10, sock_read=20)
+        headers = {"User-Agent": "Strata/1.0 (+https://strata-ai.app)"}
+        try:
+            async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+                async with session.get(url, allow_redirects=True) as response:
+                    if response.status >= 400:
+                        return f"Webpage returned HTTP {response.status}."
+                    text = await response.text(errors="replace")
+                    if len(text) > 30000:
+                        text = text[:30000] + "\n[Page content truncated.]"
+                    return text
+        except Exception as exc:
+            return f"Webpage read error: {exc}"
+
+    async def get_weather(self, location: str) -> str:
+        """Get current weather and forecast using Open-Meteo."""
+        location = str(location).strip()
+        if not location:
+            return "A location is required."
+        timeout = aiohttp.ClientTimeout(total=20)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(
+                    "https://geocoding-api.open-meteo.com/v1/search",
+                    params={"name": location, "count": 1, "language": "en", "format": "json"},
+                ) as response:
+                    geo = await response.json()
+                results = geo.get("results") or []
+                if not results:
+                    return f"I could not find a location matching {location!r}."
+                place = results[0]
+                async with session.get(
+                    "https://api.open-meteo.com/v1/forecast",
+                    params={
+                        "latitude": place["latitude"],
+                        "longitude": place["longitude"],
+                        "current": "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
+                        "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code",
+                        "forecast_days": 3,
+                        "timezone": "auto",
+                    },
+                ) as response:
+                    weather = await response.json()
+                return json.dumps({
+                    "location": {
+                        "name": place.get("name"),
+                        "admin1": place.get("admin1"),
+                        "country": place.get("country"),
+                    },
+                    "current": weather.get("current", {}),
+                    "daily": weather.get("daily", {}),
+                }, ensure_ascii=False)
+        except Exception as exc:
+            return f"Weather lookup error: {exc}"
+
+    async def get_stock_quote(self, symbol: str) -> str:
+        """Get a current-ish public market quote from Yahoo Finance's chart endpoint."""
+        symbol = str(symbol).strip().upper()
+        if not symbol:
+            return "A stock symbol is required."
+        timeout = aiohttp.ClientTimeout(total=20)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(
+                    f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}",
+                    params={"range": "1d", "interval": "1m"},
+                    headers={"User-Agent": "Strata/1.0"},
+                ) as response:
+                    if response.status >= 400:
+                        return f"Market service returned HTTP {response.status}."
+                    data = await response.json()
+            result = (data.get("chart", {}).get("result") or [None])[0]
+            if not result:
+                return f"No market data was found for {symbol}."
+            meta = result.get("meta", {})
+            return json.dumps({
+                "symbol": symbol,
+                "currency": meta.get("currency"),
+                "exchange": meta.get("exchangeName"),
+                "price": meta.get("regularMarketPrice"),
+                "previous_close": meta.get("previousClose"),
+                "market_time": meta.get("regularMarketTime"),
+            }, ensure_ascii=False)
+        except Exception as exc:
+            return f"Stock lookup error: {exc}"
+
+    async def get_sports(self, league: str, team: str = "") -> str:
+        """Get public sports scores/schedules from ESPN's scoreboard endpoint."""
+        league = str(league).strip().lower()
+        team = str(team).strip()
+        league_map = {
+            "nfl": "football/nfl",
+            "nba": "basketball/nba",
+            "wnba": "basketball/wnba",
+            "mlb": "baseball/mlb",
+            "nhl": "hockey/nhl",
+            "epl": "soccer/eng.1",
+            "premier league": "soccer/eng.1",
+            "ncaaf": "football/college-football",
+            "ncaab": "basketball/mens-college-basketball",
+        }
+        path = league_map.get(league, league if "/" in league else "")
+        if not path:
+            return "Use a supported league such as NFL, NBA, WNBA, MLB, NHL, EPL, NCAAF, or NCAAB."
+        timeout = aiohttp.ClientTimeout(total=20)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(
+                    f"https://site.api.espn.com/apis/site/v2/sports/{path}/scoreboard",
+                    headers={"User-Agent": "Strata/1.0"},
+                ) as response:
+                    if response.status >= 400:
+                        return f"Sports service returned HTTP {response.status}."
+                    data = await response.json()
+            events = []
+            for event in (data.get("events") or [])[:20]:
+                name = event.get("name", "")
+                if team and team.lower() not in name.lower():
+                    continue
+                competitions = (event.get("competitions") or [{}])[0]
+                competitors = []
+                for item in competitions.get("competitors") or []:
+                    competitors.append({
+                        "team": (item.get("team") or {}).get("displayName"),
+                        "score": item.get("score"),
+                        "home_away": item.get("homeAway"),
+                    })
+                events.append({
+                    "name": name,
+                    "date": event.get("date"),
+                    "status": (event.get("status") or {}).get("type", {}).get("detail"),
+                    "competitors": competitors,
+                })
+            return json.dumps({"league": league, "events": events}, ensure_ascii=False)
+        except Exception as exc:
+            return f"Sports lookup error: {exc}"
+
+
     async def analyze_image(self, image_data: str, prompt: str = "Analyze this image carefully and answer the user's request. If there is text, transcribe the relevant text accurately.") -> str:
         if not image_data.startswith("data:image/"):
             return "The attached file is not a supported image."
@@ -394,6 +541,61 @@ class GroqClient:
         ]
 
         tools.extend([
+            {
+                "type": "function",
+                "function": {
+                    "name": "open_webpage",
+                    "description": "Read a public webpage so Strata can analyze its contents.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"url": {"type": "string"}},
+                        "required": ["url"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get current weather and a short forecast for a named location.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_sports",
+                    "description": "Get current scores and schedules for a supported sports league, optionally filtered by team.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "league": {"type": "string"},
+                            "team": {"type": "string"},
+                        },
+                        "required": ["league"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_stock_quote",
+                    "description": "Get public market quote information for a stock symbol.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"symbol": {"type": "string"}},
+                        "required": ["symbol"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
             {
                 "type": "function",
                 "function": {
@@ -547,7 +749,18 @@ class GroqClient:
                     except (TypeError, json.JSONDecodeError):
                         arguments = {}
 
-                    if name == "discover_tools":
+                    if name == "open_webpage":
+                        result = await self.open_webpage(str(arguments.get("url", "")))
+                    elif name == "get_weather":
+                        result = await self.get_weather(str(arguments.get("location", "")))
+                    elif name == "get_sports":
+                        result = await self.get_sports(
+                            str(arguments.get("league", "")),
+                            str(arguments.get("team", "")),
+                        )
+                    elif name == "get_stock_quote":
+                        result = await self.get_stock_quote(str(arguments.get("symbol", "")))
+                    elif name == "discover_tools":
                         result = self.discover_tools(str(arguments.get("query", "")))
                     elif name == "get_navigation_links":
                         result = self.get_navigation_links(
