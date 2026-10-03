@@ -749,3 +749,14 @@ select {
   margin-top: 0;
   border-radius: 7px;
 }
+
+
+.message-attachment-image {
+  display: block;
+  width: min(280px, 100%);
+  max-height: 360px;
+  margin-top: 8px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
