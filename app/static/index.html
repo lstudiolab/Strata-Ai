@@ -1,1 +1,131 @@
-<!doctype html><html><body><h1>Strata AI</h1><div id='chat'></div><input id='input' placeholder='Message Strata'><button id='send'>Send</button><script src='/static/app.js'></script></body></html>
+import json
+import uuid
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from google.genai import types
+
+from app.config import GEMINI_API_KEY, GEMINI_MODEL, HOST, PORT, DEBUG
+from app.engine import client
+from app.memory import Memory
+
+app = FastAPI(title="Strata AI")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+mem = Memory("data/strata.db")
+
+SYSTEM_PROMPT = """
+You are Strata, a helpful general-purpose AI assistant.
+Follow these rules:
+- Be clear, direct, and useful.
+- Explain step-by-step when needed.
+- Use web search tools when current facts are needed.
+- If the user asks for code, provide clean and practical code.
+- Keep answers concise but complete.
+"""
+
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    with open("app/static/index.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "model": GEMINI_MODEL,
+        "api_key_configured": bool(GEMINI_API_KEY),
+    }
+
+
+@app.post("/api/chat")
+async def chat(req: Request):
+    if not GEMINI_API_KEY or not client:
+        return JSONResponse(
+            {"error": "GEMINI_API_KEY is not configured. Set it in the environment or Render dashboard."},
+            status_code=500,
+        )
+
+    body = await req.json()
+    message = str(body.get("message", "")).strip()
+    if not message:
+        return JSONResponse({"error": "Message is required."}, status_code=400)
+
+    session_id = str(body.get("session_id") or uuid.uuid4())
+    first_question = mem.first(session_id)
+    if not first_question:
+        mem.start(session_id, message)
+        first_question = message
+
+    history = mem.history(session_id)
+    mem.add(session_id, "user", message)
+
+    async def stream_response():
+        status_messages = [
+            "Understanding your request",
+            "Loading conversation memory",
+            "Building an answer plan",
+            "Checking web sources when needed",
+            "Verifying the response",
+        ]
+        for item in status_messages:
+            yield f"data: {json.dumps({'type': 'status', 'message': item})}\n\n"
+
+        try:
+            contents = [
+                types.Content(
+                    role="user" if role == "user" else "model",
+                    parts=[types.Part.from_text(text=text)],
+                )
+                for role, text in history
+            ]
+
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(
+                            text=f"First question: {first_question}\nCurrent request: {message}"
+                        )
+                    ],
+                )
+            )
+
+            config = types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.35,
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+            )
+
+            response = await client.aio.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=contents,
+                config=config,
+            )
+
+            answer = response.text.strip() if getattr(response, "text", None) else "No response generated."
+            mem.add(session_id, "model", answer)
+
+            yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\n\n"
+        except Exception as exc:
+            error_message = f"Something went wrong: {exc}"
+            yield f"data: {json.dumps({'type': 'error', 'message': error_message})}\n\n"
+
+    return StreamingResponse(stream_response(), media_type="text/event-stream")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host=HOST, port=PORT, reload=DEBUG)
