@@ -21,6 +21,7 @@ VISION_MODEL = "qwen/qwen3.8-27b"
 TOOL_CATALOG = {
     "browser_search": "Search the live web for current information.",
     "code_interpreter": "Run Python code for calculations, data analysis, and verification.",
+    "code_analysis": "Statically inspect source code for syntax, structure, complexity signals, and common security flags without executing it.",
     "calculator": "Evaluate mathematical expressions safely.",
     "get_current_time": "Get the current UTC date and time.",
     "format_json": "Validate and pretty-print JSON.",
@@ -483,6 +484,50 @@ class GroqClient:
             ensure_ascii=False,
         )
 
+    def analyze_code(self, code: str, language: str = "", task: str = "review") -> str:
+        """Perform deterministic static analysis without executing user code."""
+        source = str(code or "")
+        lang = str(language or "").strip().lower()
+        task = str(task or "review").strip().lower()
+        if not source.strip():
+            return json.dumps({"ok": False, "error": "No code was provided."})
+        if lang in {"py", "python", "python3"}:
+            try:
+                tree = ast.parse(source)
+            except SyntaxError as exc:
+                return json.dumps({"language": "python", "task": task, "syntax": {"valid": False, "error": f"line {exc.lineno}: {exc.msg}", "offset": exc.offset}, "executed": False}, ensure_ascii=False)
+            functions = sum(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in ast.walk(tree))
+            classes = sum(isinstance(node, ast.ClassDef) for node in ast.walk(tree))
+            imports = sum(isinstance(node, (ast.Import, ast.ImportFrom)) for node in ast.walk(tree))
+            branches = sum(isinstance(node, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.Match)) for node in ast.walk(tree))
+            risky_calls = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"eval", "exec", "compile", "__import__"}:
+                    risky_calls.append(node.func.id)
+            return json.dumps({"language": "python", "task": task, "syntax": {"valid": True, "error": None}, "lines": len(source.splitlines()), "characters": len(source), "functions": functions, "classes": classes, "imports": imports, "branching_constructs": branches, "security_flags": sorted(set(risky_calls)), "executed": False}, ensure_ascii=False)
+        pairs = {"(": ")", "[": "]", "{": "}"}
+        stack = []
+        quote = None
+        escaped = False
+        for index, char in enumerate(source):
+            if quote:
+                if escaped:
+                    escaped = False
+                elif char == "\":
+                    escaped = True
+                elif char == quote:
+                    quote = None
+                continue
+            if char in {"'", '"'}:
+                quote = char
+            elif char in pairs:
+                stack.append((char, index))
+            elif char in pairs.values():
+                if not stack or pairs[stack[-1][0]] != char:
+                    return json.dumps({"language": lang or "unknown", "task": task, "syntax": {"valid": False, "error": f"unmatched {char} at character {index}"}, "executed": False})
+                stack.pop()
+        return json.dumps({"language": lang or "unknown", "task": task, "syntax": {"valid": not stack and quote is None, "error": "unclosed delimiter or string" if stack or quote else None}, "lines": len(source.splitlines()), "characters": len(source), "executed": False}, ensure_ascii=False)
+
     async def run_agent(
         self,
         model: str,
@@ -514,6 +559,23 @@ class GroqClient:
             },
             {"type": "browser_search"},
             {"type": "code_interpreter"},
+            {
+                "type": "function",
+                "function": {
+                    "name": "analyze_code",
+                    "description": "Analyze source code safely without executing it. Use for code review, syntax checks, structural metrics, and basic security flags.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "code": {"type": "string", "description": "Source code to inspect."},
+                            "language": {"type": "string", "description": "Programming language, such as Python, JavaScript, TypeScript, Rust, C++, or Swift."},
+                            "task": {"type": "string", "description": "Requested analysis, such as review, syntax, security, complexity, or structure."}
+                        },
+                        "required": ["code"],
+                        "additionalProperties": False
+                    }
+                }
+            },
             {
                 "type": "function",
                 "function": {
@@ -820,6 +882,12 @@ class GroqClient:
                             result = json.dumps(parsed, indent=2, ensure_ascii=False)
                         except (TypeError, json.JSONDecodeError) as exc:
                             result = f"Invalid JSON: {exc}"
+                    elif name == "analyze_code":
+                        result = self.analyze_code(
+                            str(arguments.get("code", "")),
+                            str(arguments.get("language", "")),
+                            str(arguments.get("task", "review")),
+                        )
                     elif name == "calculator":
                         result = self._calculate(str(arguments.get("expression", "")))
                     elif name == "search_web":
