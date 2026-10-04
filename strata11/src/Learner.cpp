@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <sstream>
 #include <unordered_set>
+#include <utility>
 
 namespace strata11 {
 static const char* alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
