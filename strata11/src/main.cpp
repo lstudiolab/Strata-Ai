@@ -224,12 +224,12 @@ static void load_memories(const std::string& file) {
         size_t answer_size = 0;
         if (!(in >> prompt_size)) break;
         in.get();
-        std::string prompt(prompt_size, '\\0');
+        std::string prompt(prompt_size, '\0');
         in.read(prompt.data(), static_cast<std::streamsize>(prompt_size));
         if (!in.get()) break;
         if (!(in >> answer_size)) break;
         in.get();
-        std::string answer(answer_size, '\\0');
+        std::string answer(answer_size, '\0');
         in.read(answer.data(), static_cast<std::streamsize>(answer_size));
         if (!in.get()) break;
         memories.push_back({std::move(prompt), std::move(answer)});
