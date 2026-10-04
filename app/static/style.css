@@ -1102,3 +1102,42 @@ button { -webkit-tap-highlight-color: transparent; }
   .header-actions { right: 12px; }
   .conversation-top-button { left: 12px; }
 }
+
+/* Strata-only settings surface. Alternate assistant/model controls are intentionally removed. */
+.settings-subtitle {
+  margin: 3px 0 0;
+  color: #85858b;
+  font-size: 10px;
+}
+.strata-status-card {
+  margin-top: 2px;
+}
+.learning-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid rgba(0,0,0,.055);
+  border-radius: 13px;
+  background: rgba(248,248,249,.72);
+}
+.learning-status strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+}
+.learning-status p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.learning-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  flex: none;
+  border-radius: 50%;
+  background: #77777c;
+  box-shadow: 0 0 0 4px rgba(0,0,0,.045);
+}
