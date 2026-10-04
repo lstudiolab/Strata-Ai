@@ -75,7 +75,7 @@ def strata10_context(question: str) -> str:
         )
         return result.stdout.strip() if result.returncode == 0 else ""
     except Exception:
-        logger.exception("Strata 1.1 context retrieval failed")
+        logger.exception("Strata 1.0 context retrieval failed")
         return ""
 
 async def strata10_learn(assistant: str, question: str, answer: str) -> None:
@@ -98,7 +98,7 @@ async def strata10_learn(assistant: str, question: str, answer: str) -> None:
             check=False,
         )
     except Exception:
-        logger.exception("Strata 1.1 learning pass failed")
+        logger.exception("Strata 1.0 learning pass failed")
 
 
 def get_default_instructions() -> str:
@@ -485,7 +485,7 @@ async def chat(req: Request):
                     if instruction_result.returncode == 0:
                         strata11_instructions = instruction_result.stdout.strip()
                 except Exception:
-                    logger.exception("Strata 1.1 instruction retrieval failed")
+                    logger.exception("Strata 1.0 instruction retrieval failed")
 
             if strata11_instructions:
                 system_prompt += "\n\nStrata 1.1 built-in intelligence:\n" + strata11_instructions
