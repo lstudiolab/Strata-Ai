@@ -450,6 +450,26 @@ async def chat(req: Request):
             # original message. Context is compacted by message count OR total text
             # size so very long messages cannot silently overflow the model context.
             feedback_items = mem.feedback(session_id, limit=10)
+            # Give the model Strata 1.1's built-in conversational intelligence on every request.
+            strata11_instructions = ""
+            if STRATA11_BINARY.exists():
+                try:
+                    instruction_result = await asyncio.to_thread(
+                        subprocess.run,
+                        [str(STRATA11_BINARY), "--mode", "instructions", "--question", original_message],
+                        text=True,
+                        capture_output=True,
+                        timeout=1,
+                        check=False,
+                    )
+                    if instruction_result.returncode == 0:
+                        strata11_instructions = instruction_result.stdout.strip()
+                except Exception:
+                    logger.exception("Strata 1.1 instruction retrieval failed")
+
+            if strata11_instructions:
+                system_prompt += "\n\nStrata 1.1 built-in intelligence:\n" + strata11_instructions
+
             learned_context = strata11_context(original_message)
             if learned_context:
                 system_prompt += (
