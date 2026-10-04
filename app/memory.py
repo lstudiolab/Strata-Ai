@@ -58,6 +58,19 @@ class Memory:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    rating TEXT NOT NULL,
+                    note TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                )
+                """
+            )
+            db.execute("CREATE INDEX IF NOT EXISTS idx_feedback_session_id ON feedback(session_id)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id)")
 
             db.execute(
