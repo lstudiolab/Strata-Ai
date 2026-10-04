@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 namespace strata {
-struct ModelConfig { int vocab=256; int embedding=32; int hidden=128; int context=48; };
+struct ModelConfig { int vocab=256; int embedding=64; int hidden=256; int context=128; };
 class Model {
 public:
  explicit Model(ModelConfig c={});
