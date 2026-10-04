@@ -67,7 +67,11 @@ async def strata11_learn(assistant: str, question: str, answer: str) -> None:
         await asyncio.to_thread(
             subprocess.run,
             [str(STRATA11_BINARY), "--mode", "learn", "--db", str(STRATA11_LEARNING_DB)],
-            input=assistant + "\n" + question + "\n" + answer,
+            input=(
+                base64.b64encode(assistant.encode("utf-8")).decode("ascii") + "\n" +
+                base64.b64encode(question.encode("utf-8")).decode("ascii") + "\n" +
+                base64.b64encode(answer.encode("utf-8")).decode("ascii")
+            ),
             text=True,
             capture_output=True,
             timeout=3,
