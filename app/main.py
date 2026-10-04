@@ -442,7 +442,7 @@ async def chat(req: Request):
                     pasted_text=pasted_text,
                     image_data=image_data,
                     on_tool=on_tool,
-                    reasoning_effort=("high" if thinking_mode == "deep" else "low"),
+                    reasoning_effort=("high" if thinking_mode == "deep" else "medium"),
                 )
             )
 
