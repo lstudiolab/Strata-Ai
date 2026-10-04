@@ -26,14 +26,12 @@ const activeProjectLabel = document.getElementById("activeProjectLabel");
 const conversationClose = document.getElementById("conversationClose");
 const drawerBackdrop = document.getElementById("drawerBackdrop");
 const newConversationButton = document.getElementById("newConversationButton");
-const modelOptions = document.querySelectorAll(".model-option");
 const thinkingOptions = document.querySelectorAll(".thinking-option");
 const reasoningSlider = document.getElementById("reasoningSlider");
 const reasoningPercent = document.getElementById("reasoningPercent");
 
 let selectedAttachment = null;
 let selectedAttachmentData = "";
-let selectedModel = localStorage.getItem("strata_model") || "strata";
 let selectedThinking = localStorage.getItem("strata_thinking") || "fast";
 let reasoningLevel = Number(localStorage.getItem("strata_reasoning_level") || "50");
 
@@ -447,7 +445,6 @@ async function sendMessage() {
         message,
         session_id: sessionId,
         project_id: activeProjectId,
-        model_type: selectedModel,
         thinking_mode: selectedThinking,
       reasoning_level: reasoningLevel,
         pasted_text: selectedAttachment && !selectedAttachment.type.startsWith("image/")
@@ -958,25 +955,7 @@ messageInput.addEventListener("keydown", (event) => {
 });
 
 function applySettingsState() {
-  modelOptions.forEach((button) => {
-    const active = button.dataset.model === selectedModel;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", active ? "true" : "false");
-  });
-  thinkingOptions.forEach((button) => {
-    const active = button.dataset.thinking === selectedThinking;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", active ? "true" : "false");
-  });
-}
-
-modelOptions.forEach((button) => {
-  button.addEventListener("click", () => {
-    selectedModel = button.dataset.model || "strata";
-    localStorage.setItem("strata_model", selectedModel);
-    applySettingsState();
-  });
-});
+  
 
 thinkingOptions.forEach((button) => {
   button.addEventListener("click", () => {
