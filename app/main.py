@@ -382,6 +382,11 @@ async def chat(req: Request):
             mem.add(session_id, "model", answer)
             yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            if long_message_path:
+                try:
+                    Path(long_message_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
         except Exception as exc:
             logger.exception("Chat generation failed")
             safe_error = str(exc).strip().replace("\n", " ")[:400]
@@ -392,6 +397,11 @@ async def chat(req: Request):
                     "Please try again in a few seconds."
                 )
             yield f"data: {json.dumps({'type': 'error', 'message': f'Strata could not complete the request: {safe_error}'})}\n\n"
+            if long_message_path:
+                try:
+                    Path(long_message_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     return StreamingResponse(
         stream_response(),
