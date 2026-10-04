@@ -242,7 +242,7 @@ class GroqClient:
         )
         return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
 
-    async def deep_research(self, topic: str, focus: str = "") -> str:
+    async def deep_research(self, topic: str, focus: str = "", model: str = DEFAULT_MODEL, max_tokens: int = 6000) -> str:
         """Perform a deeper multi-source research pass using browser search."""
         request = topic if not focus else f"Topic: {topic}\nResearch focus: {focus}"
         data = await self._completion(
@@ -261,8 +261,9 @@ class GroqClient:
             ],
             tools=[{"type": "browser_search"}],
             tool_choice="required",
-            max_tokens=6000,
+            max_tokens=max_tokens,
             temperature=0.2,
+            model=model,
         )
         return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
 
