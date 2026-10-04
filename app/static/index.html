@@ -59,8 +59,26 @@
 
       <div class="input-container">
         <form class="input-wrapper" id="chatForm">
-          <button id="attachmentButton" class="context-button" type="button" aria-label="Add a photo or file">+</button>
-          <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
+          <div class="attachment-menu-wrap">
+            <button id="attachmentButton" class="context-button" type="button" aria-label="Add attachment" aria-expanded="false">+</button>
+            <div id="attachmentMenu" class="attachment-menu" aria-hidden="true">
+              <button class="attachment-menu-item" type="button" data-attachment-source="camera">
+                <span class="attachment-menu-icon">⌾</span>
+                <span><strong>Camera</strong><small>Take a photo</small></span>
+              </button>
+              <button class="attachment-menu-item" type="button" data-attachment-source="photos">
+                <span class="attachment-menu-icon">▧</span>
+                <span><strong>Photos</strong><small>Choose an image</small></span>
+              </button>
+              <button class="attachment-menu-item" type="button" data-attachment-source="files">
+                <span class="attachment-menu-icon">□</span>
+                <span><strong>Files</strong><small>Choose a document</small></span>
+              </button>
+            </div>
+          </div>
+          <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+          <input id="photoInput" type="file" accept="image/*" hidden />
+          <input id="fileInput" type="file" accept=".txt,.md,.markdown,.json,.csv,.log,.py,.js,.jsx,.ts,.tsx,.html,.css,.xml,.yaml,.yml,.toml,.rs,.cpp,.cc,.c,.h,.hpp,.swift,.java,.go,.rb,.php,.sql,.sh,text/*,application/json" hidden />
           <input
             id="messageInput"
             class="message-input glass-input"
