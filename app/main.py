@@ -44,8 +44,9 @@ def get_default_instructions() -> str:
     )
 
 
-def load_instructions() -> str:
-    path = INSTRUCTIONS_DIR / "strata.md"
+def load_instructions(model_type: str = "strata") -> str:
+    filename = "strata_code.md" if model_type == "strata-code" else "strata.md"
+    path = INSTRUCTIONS_DIR / filename
     if path.is_file():
         text = path.read_text(encoding="utf-8").strip()
         if text:
@@ -124,16 +125,13 @@ async def get_models():
             model_name = await client.highest_priced_model()
         except Exception:
             logger.exception("Unable to resolve the Strata model")
-
-    return {
-        "models": [
-            {
-                "id": "strata",
-                "name": "Strata 1.0",
-                "model": model_name,
-            }
-        ]
-    }
+    return {"models": [
+        {"id": "strata", "name": "Strata", "description": "General-purpose assistant", "model": model_name},
+        {"id": "strata-code", "name": "Strata Code", "description": "Programming and technical work", "model": model_name},
+    ], "thinking_modes": [
+        {"id": "fast", "name": "Think faster", "description": "Quicker responses"},
+        {"id": "deep", "name": "Deep thinking", "description": "More reasoning before answering"},
+    ]}
 
 
 @app.get("/api/credits")
@@ -197,6 +195,12 @@ async def chat(req: Request):
     pasted_text = str(body.get("pasted_text", "") or "").strip()
     image_data = str(body.get("image_data", "") or "").strip()
     attachment_type = str(body.get("attachment_type", "") or "").strip()
+    model_type = str(body.get("model_type", "strata") or "strata").strip()
+    if model_type not in {"strata", "strata-code"}:
+        model_type = "strata"
+    thinking_mode = str(body.get("thinking_mode", "fast") or "fast").strip()
+    if thinking_mode not in {"fast", "deep"}:
+        thinking_mode = "fast"
 
     if not message and not image_data:
         return JSONResponse({"error": "Message or image attachment is required."}, status_code=400)
@@ -227,7 +231,7 @@ async def chat(req: Request):
 
         try:
             model_name = await client.highest_priced_model()
-            system_prompt = load_instructions()
+            system_prompt = load_instructions(model_type)
             tool_events: asyncio.Queue = asyncio.Queue()
 
             # Message understanding is handled inside the main Strata request.
@@ -341,6 +345,7 @@ async def chat(req: Request):
                     pasted_text=pasted_text,
                     image_data=image_data,
                     on_tool=on_tool,
+                    reasoning_effort=("high" if thinking_mode == "deep" else "low"),
                 )
             )
 
