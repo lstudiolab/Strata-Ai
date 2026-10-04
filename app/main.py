@@ -128,10 +128,10 @@ async def get_models():
         except Exception:
             logger.exception("Unable to resolve the Strata model")
     return {"models": [
-        {"id": "strata", "name": "Strata", "version": "1.0", "description": "General-purpose assistant", "model": model_name},
+        {"id": "strata", "name": "Strata", "version": "1.1", "description": "General-purpose assistant", "model": model_name},
         {"id": "strata-code", "name": "Strata Code", "version": "1.0", "description": "Programming and technical work", "model": model_name},
         {"id": "sunken", "name": "Sunken", "version": "1.0", "description": "Focused, analytical assistant", "model": model_name},
-        {"id": "volt", "name": "Volt", "version": "1.0", "description": "Fast-response assistant", "model": model_name},
+        {"id": "volt", "name": "Volt", "version": "1.0", "description": "Writing specialist", "model": model_name},
     ], "thinking_modes": [
         {"id": "fast", "name": "Think faster", "description": "Quicker responses"},
         {"id": "deep", "name": "Deep thinking", "description": "More reasoning before answering"},
