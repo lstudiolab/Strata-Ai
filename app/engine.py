@@ -35,6 +35,9 @@ TOOL_CATALOG = {
     "get_weather": "Get current weather and forecasts for a location.",
     "get_sports": "Get current sports scores, schedules, and standings.",
     "get_stock_quote": "Get current public market information for a stock symbol.",
+    "text_stats": "Measure text length, words, lines, and characters.",
+    "regex_find": "Find regular-expression matches in supplied text without executing code.",
+    "unit_convert": "Convert common length, mass, temperature, time, and data units.",
 }
 
 
@@ -528,6 +531,35 @@ class GroqClient:
                 stack.pop()
         return json.dumps({"language": lang or "unknown", "task": task, "syntax": {"valid": not stack and quote is None, "error": "unclosed delimiter or string" if stack or quote else None}, "lines": len(source.splitlines()), "characters": len(source), "executed": False}, ensure_ascii=False)
 
+
+    @staticmethod
+    def text_stats(value: str) -> str:
+        text = str(value or "")
+        import re
+        return json.dumps({"characters": len(text), "characters_without_spaces": len(re.sub(r"\\s", "", text)), "words": len(re.findall(r"\\b\\w+\\b", text)), "lines": len(text.splitlines()) if text else 0, "paragraphs": len([p for p in text.split("\\n\\n") if p.strip()])}, ensure_ascii=False)
+
+    @staticmethod
+    def regex_find(pattern: str, value: str) -> str:
+        import re
+        try:
+            matches = re.findall(str(pattern), str(value or ""))
+            return json.dumps({"matches": matches[:500], "count": len(matches)}, ensure_ascii=False)
+        except re.error as exc:
+            return f"Regex error: {exc}"
+
+    @staticmethod
+    def unit_convert(value: float, from_unit: str, to_unit: str) -> str:
+        f, t = str(from_unit).lower().strip(), str(to_unit).lower().strip()
+        aliases = {"km":("length",1000),"m":("length",1),"cm":("length",.01),"mm":("length",.001),"mi":("length",1609.344),"ft":("length",.3048),"in":("length",.0254),"kg":("mass",1),"g":("mass",.001),"mg":("mass",.000001),"lb":("mass",.45359237),"oz":("mass",.028349523125),"s":("time",1),"sec":("time",1),"min":("time",60),"h":("time",3600),"hr":("time",3600),"kb":("data",1000),"mb":("data",1000**2),"gb":("data",1000**3),"kib":("data",1024),"mib":("data",1024**2),"gib":("data",1024**3)}
+        if f in aliases and t in aliases:
+            if aliases[f][0] != aliases[t][0]: return "Those units are not compatible."
+            return str(float(value) * aliases[f][1] / aliases[t][1])
+        if f in {"c","celsius"} and t in {"f","fahrenheit"}: return str(float(value) * 9 / 5 + 32)
+        if f in {"f","fahrenheit"} and t in {"c","celsius"}: return str((float(value) - 32) * 5 / 9)
+        if f in {"c","celsius"} and t in {"k","kelvin"}: return str(float(value) + 273.15)
+        if f in {"k","kelvin"} and t in {"c","celsius"}: return str(float(value) - 273.15)
+        return "Unsupported or incompatible units."
+
     async def get_text_file(self, path: str) -> str:
         """Read a Strata-created temporary text file without executing it."""
         from pathlib import Path
@@ -640,6 +672,9 @@ class GroqClient:
                     "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
                 },
             },
+            {"type":"function","function":{"name":"text_stats","description":"Measure supplied text: characters, non-whitespace characters, words, lines, and paragraphs.","parameters":{"type":"object","properties":{"value":{"type":"string"}},"required":["value"],"additionalProperties":False}}},
+            {"type":"function","function":{"name":"regex_find","description":"Find regex matches in supplied text without executing code.","parameters":{"type":"object","properties":{"pattern":{"type":"string"},"value":{"type":"string"}},"required":["pattern","value"],"additionalProperties":False}}},
+            {"type":"function","function":{"name":"unit_convert","description":"Convert compatible common units including length, mass, time, data, and temperature.","parameters":{"type":"object","properties":{"value":{"type":"number"},"from_unit":{"type":"string"},"to_unit":{"type":"string"}},"required":["value","from_unit","to_unit"],"additionalProperties":False}}},
             {
                 "type": "function",
                 "function": {
@@ -929,6 +964,15 @@ class GroqClient:
                             str(arguments.get("language", "")),
                             str(arguments.get("task", "review")),
                         )
+                    elif name == "text_stats":
+                        result = self.text_stats(str(arguments.get("value", "")))
+                    elif name == "regex_find":
+                        result = self.regex_find(str(arguments.get("pattern", "")), str(arguments.get("value", "")))
+                    elif name == "unit_convert":
+                        try:
+                            result = self.unit_convert(float(arguments.get("value", 0)), str(arguments.get("from_unit", "")), str(arguments.get("to_unit", "")))
+                        except (TypeError, ValueError):
+                            result = "The value must be numeric."
                     elif name == "get_text_file":
                         result = await self.get_text_file(str(arguments.get("path", "")))
                     elif name == "calculator":
