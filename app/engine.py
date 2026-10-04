@@ -491,6 +491,7 @@ class GroqClient:
         pasted_text: str = "",
         image_data: str = "",
         on_tool=None,
+        reasoning_effort: str = "low",
     ) -> str:
         working = [
             {"role": "system", "content": system_prompt},
@@ -725,7 +726,7 @@ class GroqClient:
                     "max_completion_tokens": 4096 if sum(len(str(m.get("content") or "")) for m in working) < 14000 else 2048,
                     "temperature": 0.7,
                     "top_p": 0.9,
-                    "reasoning_effort": "high",
+                    "reasoning_effort": reasoning_effort if reasoning_effort in {"low", "high"} else "low",
                     "tool_choice": "auto",
             
                 }
