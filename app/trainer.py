@@ -33,6 +33,9 @@ LEARNING_DB = Path(
         BASE_DIR / "strata11" / "data" / "learning.tsv",
     )
 )
+TEACHER_MODEL = os.environ.get("STRATA_TEACHER_MODEL", "llama-3.1-8b-instant")
+TEACHER_MAX_TOKENS = int(os.environ.get("STRATA_TEACHER_MAX_TOKENS", "2500"))
+
 TRAINING_DATASET = Path(
     os.environ.get(
         "STRATA_TRAINING_DATASET",
@@ -133,7 +136,7 @@ async def run_training_cycle() -> bool:
 
     try:
         # deep_research performs live source retrieval through the teacher model.
-        lesson = await client.deep_research(topic, question)
+        lesson = await client.deep_research(topic, question, model=TEACHER_MODEL, max_tokens=TEACHER_MAX_TOKENS)
         if not lesson.strip():
             return False
 
