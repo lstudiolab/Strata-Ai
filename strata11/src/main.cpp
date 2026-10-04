@@ -1,6 +1,7 @@
 #include "strata11/Learner.hpp"
 #include "strata11/Instructions.hpp"
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
