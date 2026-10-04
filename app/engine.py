@@ -592,6 +592,7 @@ class GroqClient:
         image_data: str = "",
         on_tool=None,
         reasoning_effort: str = "low",
+        allow_tools: bool = True,
     ) -> str:
         working = [
             {"role": "system", "content": system_prompt},
@@ -807,7 +808,10 @@ class GroqClient:
             },
         ])
 
-        if image_data.startswith("data:image/"):
+        if not allow_tools:
+            tools = []
+
+        if image_data.startswith("data:image/") and allow_tools:
             tools.append({
                 "type": "function",
                 "function": {
