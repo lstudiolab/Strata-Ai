@@ -18,7 +18,11 @@ const settingsButton = document.getElementById("settingsButton");
 const settingsPanel = document.getElementById("settingsPanel");
 const settingsClose = document.getElementById("settingsClose");
 const conversationDrawer = document.getElementById("conversationDrawer");
+const conversationButton = document.getElementById("conversationButton");
 const conversationList = document.getElementById("conversationList");
+const projectList = document.getElementById("projectList");
+const newProjectButton = document.getElementById("newProjectButton");
+const activeProjectLabel = document.getElementById("activeProjectLabel");
 const conversationClose = document.getElementById("conversationClose");
 const drawerBackdrop = document.getElementById("drawerBackdrop");
 const newConversationButton = document.getElementById("newConversationButton");
@@ -29,6 +33,7 @@ let selectedAttachment = null;
 let selectedAttachmentData = "";
 let selectedModel = localStorage.getItem("strata_model") || "strata";
 let selectedThinking = localStorage.getItem("strata_thinking") || "fast";
+let activeProjectId = localStorage.getItem("strata_project_id") || "";
 
 const API_BASE =
   (window.STRATA_API_URL || document.documentElement.dataset.apiBase || "")
@@ -426,6 +431,7 @@ async function sendMessage() {
       body: JSON.stringify({
         message,
         session_id: sessionId,
+        project_id: activeProjectId,
         model_type: selectedModel,
         thinking_mode: selectedThinking,
         pasted_text: selectedAttachment && !selectedAttachment.type.startsWith("image/")
@@ -635,11 +641,19 @@ refreshTokenMeter();
 setInterval(refreshTokenMeter, 15000);
 
 function closeConversationDrawer() {
-  closeSettings();
+  if (!conversationDrawer) return;
+  conversationDrawer.classList.remove("open");
+  conversationDrawer.setAttribute("aria-hidden", "true");
+  drawerBackdrop?.classList.remove("open");
+  drawerBackdrop?.setAttribute("aria-hidden", "true");
 }
 
 function openConversationDrawer() {
-  openSettings();
+  conversationDrawer?.classList.add("open");
+  conversationDrawer?.setAttribute("aria-hidden", "false");
+  drawerBackdrop?.classList.add("open");
+  drawerBackdrop?.setAttribute("aria-hidden", "false");
+  loadProjects();
   loadConversations();
 }
 
@@ -651,11 +665,73 @@ function startNewConversation() {
   closeConversationDrawer();
 }
 
+async function loadProjects() {
+  if (!projectList) return;
+  projectList.innerHTML = "Loading projects...";
+  try {
+    const response = await fetch(API_BASE + "/api/projects");
+    const data = await response.json();
+    const projects = Array.isArray(data.projects) ? data.projects : [];
+    projectList.innerHTML = "";
+
+    const all = document.createElement("button");
+    all.type = "button";
+    all.className = "project-item" + (!activeProjectId ? " active" : "");
+    all.innerHTML = '<span class="project-icon">⌘</span><span><strong>All conversations</strong><small>Every conversation</small></span>';
+    all.addEventListener("click", () => selectProject(""));
+    projectList.appendChild(all);
+
+    projects.forEach((project) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "project-item" + (project.id === activeProjectId ? " active" : "");
+      button.innerHTML = '<span class="project-icon">□</span><span><strong></strong><small></small></span>';
+      button.querySelector("strong").textContent = project.name;
+      button.querySelector("small").textContent = (project.conversation_count || 0) + " conversations";
+      button.addEventListener("click", () => selectProject(project.id, project.name));
+      projectList.appendChild(button);
+    });
+  } catch (_) {
+    projectList.textContent = "Unable to load projects.";
+  }
+}
+
+async function selectProject(id, name = "") {
+  activeProjectId = id || "";
+  localStorage.setItem("strata_project_id", activeProjectId);
+  if (activeProjectLabel) activeProjectLabel.textContent = name || "All conversations";
+  await loadProjects();
+  await loadConversations();
+}
+
+async function createProject() {
+  const name = window.prompt("Project name", "");
+  if (!name || !name.trim()) return;
+  const description = window.prompt("Project description (optional)", "") || "";
+  try {
+    const response = await fetch(API_BASE + "/api/projects", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name: name.trim(), description: description.trim()}),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.project) throw new Error("create failed");
+    activeProjectId = data.project.id;
+    localStorage.setItem("strata_project_id", activeProjectId);
+    if (activeProjectLabel) activeProjectLabel.textContent = data.project.name;
+    await loadProjects();
+    await loadConversations();
+  } catch (_) {
+    window.alert("The project could not be created.");
+  }
+}
+
 async function loadConversations() {
   if (!conversationList) return;
   conversationList.innerHTML = "Loading conversations...";
   try {
-    const response = await fetch(API_BASE + "/api/conversations");
+    const query = activeProjectId ? "?project_id=" + encodeURIComponent(activeProjectId) : "";
+    const response = await fetch(API_BASE + "/api/conversations" + query);
     const data = await response.json();
     const conversations = Array.isArray(data.conversations) ? data.conversations : [];
     conversationList.innerHTML = "";
@@ -689,6 +765,8 @@ async function loadConversation(id) {
     const data = await response.json();
     sessionId = id;
     localStorage.setItem("strata_session_id", sessionId);
+    activeProjectId = data.project_id || activeProjectId;
+    localStorage.setItem("strata_project_id", activeProjectId);
     messagesContainer.innerHTML = "";
     for (const item of data.messages || []) {
       addMessage(item.role === "user" ? "user" : "assistant", item.content || "");
@@ -896,11 +974,16 @@ applySettingsState();
 
 settingsButton?.addEventListener("click", openSettings);
 settingsClose?.addEventListener("click", closeSettings);
+conversationButton?.addEventListener("click", openConversationDrawer);
 conversationClose?.addEventListener("click", closeConversationDrawer);
 drawerBackdrop?.addEventListener("click", closeConversationDrawer);
 newConversationButton?.addEventListener("click", startNewConversation);
+newProjectButton?.addEventListener("click", createProject);
 
 window.addEventListener("load", () => {
+  if (activeProjectId) {
+    loadProjects();
+  }
   // Do not inject a canned assistant response. The first assistant message
   // shown in a conversation must come from the API.
 });
