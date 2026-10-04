@@ -903,7 +903,15 @@ class GroqClient:
                 calls = message.get("tool_calls") or []
 
                 if not calls:
-                    return (message.get("content") or "").strip()
+                    content = (message.get("content") or "").strip()
+                    if content:
+                        return content
+                    if round_number >= 1:
+                        raise RuntimeError("The model returned an empty final response.")
+                    continue
+
+                if round_number >= 1:
+                    raise RuntimeError("The model attempted another tool round after tool use was stopped.")
 
                 working.append({
                     "role": "assistant",
