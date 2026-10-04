@@ -13,9 +13,10 @@ public:
  std::string generate(const std::string&, int=160, float=0.8f) const;
  std::size_t parameters() const;
 private:
- ModelConfig c_; std::vector<float> e_,w_,b_,o_,ob_;
+ ModelConfig c_;
+ std::vector<float> e_,w_,b_,o_,ob_;
  void init();
- std::vector<float> forward(const std::vector<unsigned char>&) const;
+ std::vector<float> logits(const std::vector<unsigned char>&) const;
  unsigned char sample(const std::vector<float>&,float) const;
 };
 }
