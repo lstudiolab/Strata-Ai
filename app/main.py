@@ -45,7 +45,7 @@ def get_default_instructions() -> str:
 
 
 def load_instructions(model_type: str = "strata") -> str:
-    filename = "strata_code.md" if model_type == "strata-code" else "strata.md"
+    filename = "strata_code.md" if model_type == "strata-code" else ("sunken.md" if model_type == "sunken" else "strata.md")
     path = INSTRUCTIONS_DIR / filename
     if path.is_file():
         text = path.read_text(encoding="utf-8").strip()
@@ -126,8 +126,9 @@ async def get_models():
         except Exception:
             logger.exception("Unable to resolve the Strata model")
     return {"models": [
-        {"id": "strata", "name": "Strata", "description": "General-purpose assistant", "model": model_name},
-        {"id": "strata-code", "name": "Strata Code", "description": "Programming and technical work", "model": model_name},
+        {"id": "strata", "name": "Strata", "version": "1.0", "description": "General-purpose assistant", "model": model_name},
+        {"id": "strata-code", "name": "Strata Code", "version": "1.0", "description": "Programming and technical work", "model": model_name},
+        {"id": "sunken", "name": "Sunken", "version": "1.0", "description": "Focused, analytical assistant", "model": model_name},
     ], "thinking_modes": [
         {"id": "fast", "name": "Think faster", "description": "Quicker responses"},
         {"id": "deep", "name": "Deep thinking", "description": "More reasoning before answering"},
@@ -195,7 +196,7 @@ async def chat(req: Request):
     pasted_text = str(body.get("pasted_text", "") or "").strip()\n    long_message_path = ""\n    if len(message) > 12000:\n        long_dir = Path("/tmp/strata_long_messages")\n        long_dir.mkdir(parents=True, exist_ok=True)\n        long_message_path = str(long_dir / f"{uuid.uuid4().hex}.txt")\n        Path(long_message_path).write_text(message, encoding="utf-8")\n        message = (\n            "The user's full message is stored in a temporary text file. "\n            "Use the get_text_file tool to read it before answering. "\n            f"Temporary file: {long_message_path}"\n        )\n    image_data = str(body.get("image_data", "") or "").strip()
     attachment_type = str(body.get("attachment_type", "") or "").strip()
     model_type = str(body.get("model_type", "strata") or "strata").strip()
-    if model_type not in {"strata", "strata-code"}:
+    if model_type not in {"strata", "strata-code", "sunken"}:
         model_type = "strata"
     thinking_mode = str(body.get("thinking_mode", "fast") or "fast").strip()
     if thinking_mode not in {"fast", "deep"}:
