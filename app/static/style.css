@@ -1052,6 +1052,8 @@ button { -webkit-tap-highlight-color: transparent; }
   border-color: rgba(0,0,0,.12);
 }
 .model-option-name, .thinking-option-name { display: block; font-size: 12px; font-weight: 650; }
+.model-option-version { display: block; margin-top: 2px; color: #77777d; font-size: 9.5px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.model-option-description { margin-top: 3px; }
 .model-option-description, .thinking-option-description {
   display: block;
   margin-top: 3px;
