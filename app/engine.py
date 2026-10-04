@@ -40,6 +40,34 @@ TOOL_CATALOG = {
     "unit_convert": "Convert common length, mass, temperature, time, and data units.",
 }
 
+# Strict model capabilities. A model only receives and can execute tools in its
+# own capability set. This keeps specialist models focused and prevents one
+# assistant from accidentally reaching another assistant's tool domain.
+MODEL_TOOLSETS = {
+    "strata": {
+        "browser_search", "search_web", "open_webpage", "deep_research",
+        "calculator", "get_current_time", "format_json", "study",
+        "get_navigation_links", "get_weather", "get_sports", "get_stock_quote",
+        "unit_convert", "analyze_image", "get_pasted_text", "get_text_file",
+    },
+    "volt": {
+        "text_stats", "regex_find", "format_json", "unit_convert",
+        "get_pasted_text", "get_text_file", "analyze_image",
+    },
+    "strata-code": {
+        "code_interpreter", "code_analysis", "analyze_code", "calculator",
+        "format_json", "regex_find", "unit_convert", "get_pasted_text",
+        "get_text_file", "search_web", "open_webpage",
+    },
+    "sunken": {
+        "browser_search", "search_web", "open_webpage", "deep_research",
+        "calculator", "code_interpreter", "code_analysis", "analyze_code",
+        "format_json", "unit_convert", "get_current_time", "analyze_image",
+        "get_pasted_text", "get_text_file", "study",
+    },
+}
+
+
 
 class GroqClient:
     def __init__(self, api_key: str):
@@ -592,7 +620,7 @@ class GroqClient:
         image_data: str = "",
         on_tool=None,
         reasoning_effort: str = "low",
-        allow_tools: bool = True,
+        allow_tools: bool = True, model_type: str = "strata",
     ) -> str:
         working = [
             {"role": "system", "content": system_prompt},
@@ -808,10 +836,19 @@ class GroqClient:
             },
         ])
 
+        allowed_tools = MODEL_TOOLSETS.get(model_type, MODEL_TOOLSETS["strata"])
+
+        # Filter every schema before it reaches the provider. The provider must never
+        # see tools belonging to another assistant.
+        tools = [
+            tool for tool in tools
+            if ((tool.get("function") or {}).get("name") in allowed_tools)
+        ]
+
         if not allow_tools:
             tools = []
 
-        if image_data.startswith("data:image/") and allow_tools:
+        if image_data.startswith("data:image/") and allow_tools and "analyze_image" in allowed_tools:
             tools.append({
                 "type": "function",
                 "function": {
@@ -826,7 +863,7 @@ class GroqClient:
                 },
             })
 
-        if pasted_text.strip():
+        if pasted_text.strip() and allow_tools and "get_pasted_text" in allowed_tools:
             tools.append({
                 "type": "function",
                 "function": {
@@ -923,6 +960,11 @@ class GroqClient:
                     function = call.get("function") or {}
                     name = function.get("name", "")
                     call_id = call.get("id", "")
+
+                    if name not in allowed_tools:
+                        raise RuntimeError(
+                            f"Tool '{name}' is not enabled for the {model_type} assistant."
+                        )
 
                     if on_tool is not None:
                         await on_tool(name, round_number + 1)
