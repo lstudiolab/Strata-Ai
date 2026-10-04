@@ -169,8 +169,37 @@ async def add_feedback(req: Request):
 
 
 @app.get("/api/conversations")
-async def get_conversations():
+async def get_conversations(project_id: str = ""):
+    if project_id:
+        return {"conversations": mem.project_conversations(project_id)}
     return {"conversations": mem.list_sessions()}
+
+@app.get("/api/projects")
+async def get_projects():
+    return {"projects": mem.list_projects()}
+
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: str):
+    project = mem.get_project(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found."}, status_code=404)
+    project["conversations"] = mem.project_conversations(project_id)
+    return project
+
+@app.post("/api/projects")
+async def create_project(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON request."}, status_code=400)
+    name = str(body.get("name") or "").strip()
+    description = str(body.get("description") or "").strip()
+    if not name:
+        return JSONResponse({"error": "Project name is required."}, status_code=400)
+    project_id = "project_" + uuid.uuid4().hex
+    if not mem.create_project(project_id, name, description):
+        return JSONResponse({"error": "Project could not be created."}, status_code=500)
+    return {"project": mem.get_project(project_id)}
 
 
 @app.get("/api/conversations/{session_id}")
@@ -275,10 +304,13 @@ async def chat(req: Request):
         image_data = ""
 
     session_id = str(body.get("session_id") or uuid.uuid4())
+    project_id = str(body.get("project_id") or "").strip()
+    if project_id and not mem.get_project(project_id):
+        project_id = ""
     first_question = mem.first(session_id)
     if not first_question:
         first_question = original_message or str(body.get("attachment_name", "Image attachment"))
-        mem.start(session_id, first_question)
+        mem.start(session_id, first_question, project_id)
 
     history = mem.history(session_id, limit=32)
     # Store the original wording for conversation history; only the model-facing
