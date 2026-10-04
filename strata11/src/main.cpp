@@ -1,5 +1,6 @@
 #include "strata11/Model.hpp"
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -155,15 +156,20 @@ static void sse_reply(int fd, const std::string& body) {
     send_all(fd, body);
 }
 
+static bool ends_with(const std::string& value, const std::string& suffix) {
+    return value.size() >= suffix.size() &&
+           value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
 static std::string mime_type(const std::string& path) {
-    if (path.ends_with(".html")) return "text/html; charset=utf-8";
-    if (path.ends_with(".js")) return "application/javascript; charset=utf-8";
-    if (path.ends_with(".css")) return "text/css; charset=utf-8";
-    if (path.ends_with(".json")) return "application/json; charset=utf-8";
-    if (path.ends_with(".svg")) return "image/svg+xml";
-    if (path.ends_with(".png")) return "image/png";
-    if (path.ends_with(".jpg") || path.ends_with(".jpeg")) return "image/jpeg";
-    if (path.ends_with(".webp")) return "image/webp";
+    if (ends_with(path, ".html")) return "text/html; charset=utf-8";
+    if (ends_with(path, ".js")) return "application/javascript; charset=utf-8";
+    if (ends_with(path, ".css")) return "text/css; charset=utf-8";
+    if (ends_with(path, ".json")) return "application/json; charset=utf-8";
+    if (ends_with(path, ".svg")) return "image/svg+xml";
+    if (ends_with(path, ".png")) return "image/png";
+    if (ends_with(path, ".jpg") || ends_with(path, ".jpeg")) return "image/jpeg";
+    if (ends_with(path, ".webp")) return "image/webp";
     return "application/octet-stream";
 }
 
