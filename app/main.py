@@ -334,6 +334,17 @@ async def chat(req: Request):
         try:
             model_name = await client.highest_priced_model()
             system_prompt = load_instructions(model_type)
+            capability_descriptions = {
+                "strata": "general web, navigation, weather, sports, market, research, study, calculation, and media capabilities",
+                "volt": "writing-focused text analysis, formatting, supplied-text, and lightweight transformation capabilities",
+                "strata-code": "programming, code analysis, calculation, file/text, and technical research capabilities",
+                "sunken": "deep research, analysis, data, calculation, code-analysis, and source-reading capabilities",
+            }
+            system_prompt += (
+                "\\n\\nTool capability boundary: this assistant may use only its assigned "
+                "capabilities: " + capability_descriptions.get(model_type, capability_descriptions["strata"]) +
+                ". Do not attempt to invoke or claim access to capabilities outside this assistant's role."
+            )
             project = mem.get_project(project_id) if project_id else None
             if project:
                 system_prompt += (
@@ -511,6 +522,7 @@ async def chat(req: Request):
                     pasted_text=request_pasted_text,
                     image_data=image_data,
                     on_tool=on_tool,
+                    model_type=model_type,
                     reasoning_effort=("high" if thinking_mode == "deep" else ("low" if simple_chat else "medium")),
                     allow_tools=not simple_chat,
                 )
