@@ -221,6 +221,85 @@ button { -webkit-tap-highlight-color: transparent; }
 .message-input::placeholder { color: #96969b; }
 .message-input:disabled { opacity: .5; }
 
+.attachment-menu-wrap {
+  position: relative;
+  flex: 0 0 34px;
+}
+
+.attachment-menu {
+  position: absolute;
+  left: 0;
+  bottom: 43px;
+  width: 205px;
+  padding: 6px;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 15px;
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 16px 42px rgba(0,0,0,.12);
+  backdrop-filter: blur(25px) saturate(115%);
+  -webkit-backdrop-filter: blur(25px) saturate(115%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px) scale(.97);
+  transform-origin: bottom left;
+  transition: opacity .16s ease, transform .18s cubic-bezier(.22,1,.36,1);
+  z-index: 70;
+}
+
+.attachment-menu.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.attachment-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background .14s ease, transform .14s ease;
+}
+
+.attachment-menu-item:hover {
+  background: rgba(0,0,0,.045);
+  transform: translateX(1px);
+}
+
+.attachment-menu-item strong,
+.attachment-menu-item small {
+  display: block;
+}
+
+.attachment-menu-item strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.attachment-menu-item small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.attachment-menu-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  border-radius: 8px;
+  background: #f0f0f2;
+  color: #5f6065;
+  font-size: 15px;
+}
+
 .context-button {
   width: 34px;
   height: 34px;
