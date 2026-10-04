@@ -385,8 +385,12 @@ async function sendMessage() {
         session_id: sessionId,
         model_type: selectedModel,
         thinking_mode: selectedThinking,
-        pasted_text: contextText,
-        image_data: selectedAttachmentData,
+        pasted_text: selectedAttachment && !selectedAttachment.type.startsWith("image/")
+          ? selectedAttachmentData
+          : contextText,
+        image_data: selectedAttachment && selectedAttachment.type.startsWith("image/")
+          ? selectedAttachmentData
+          : "",
         attachment_name: selectedAttachment?.name || "",
         attachment_type: selectedAttachment?.type || "",
       }),
