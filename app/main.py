@@ -206,6 +206,7 @@ async def create_project(req: Request):
 async def get_conversation(session_id: str):
     return {
         "session_id": session_id,
+        "project_id": mem.project_id_for_session(session_id),
         "messages": [
             {"role": role, "content": content}
             for role, content in mem.conversation(session_id)
