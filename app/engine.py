@@ -829,7 +829,7 @@ class GroqClient:
                     "max_completion_tokens": self._agent_completion_budget(working, reasoning_effort),
                     "temperature": 0.7,
                     "top_p": 0.9,
-                    "reasoning_effort": reasoning_effort if reasoning_effort in {"low", "high"} else "low",
+                    "reasoning_effort": reasoning_effort if reasoning_effort in {"low", "medium", "high"} else "medium",
                     "tool_choice": "auto",
             
                 }
