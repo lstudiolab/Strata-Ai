@@ -271,6 +271,14 @@ async def chat(req: Request):
     thinking_mode = str(body.get("thinking_mode", "fast") or "fast").strip()
     if thinking_mode not in {"fast", "deep"}:
         thinking_mode = "fast"
+    try:
+        reasoning_level = max(0, min(100, int(body.get("reasoning_level", 50))))
+    except (TypeError, ValueError):
+        reasoning_level = 50
+    if reasoning_level >= 75:
+        thinking_mode = "deep"
+    elif reasoning_level < 75:
+        thinking_mode = "fast"
 
     if not message and not image_data:
         return JSONResponse({"error": "Message or image attachment is required."}, status_code=400)
