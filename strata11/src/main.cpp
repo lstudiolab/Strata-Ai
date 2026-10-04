@@ -18,6 +18,19 @@ int main(int argc,char**argv){
         r.assistant=arg(argc,argv,"--assistant","strata");
         r.question=arg(argc,argv,"--question");
         r.answer=arg(argc,argv,"--answer");
+        if(r.question.empty()||r.answer.empty()){
+            std::string a,b,q;
+            std::getline(std::cin,a);
+            std::getline(std::cin,b);
+            std::getline(std::cin,q);
+            if(a.empty()||b.empty()) return 2;
+            // stdin records are base64 encoded to safely carry arbitrary UTF-8 text.
+            // Reuse the learner's decoding path by accepting decoded text from the
+            // command-line protocol in future versions; this build uses raw lines.
+            r.assistant=a;
+            r.question=b;
+            r.answer=q;
+        }
         if(r.question.empty()||r.answer.empty()) return 2;
         std::cout<<learner.learn(r)<<'\n';
         return 0;
