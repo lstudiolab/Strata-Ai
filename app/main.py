@@ -401,6 +401,7 @@ async def chat(req: Request):
             system_prompt = load_instructions(model_type)
             capability_descriptions = {
                 "strata": "general web, navigation, weather, sports, market, research, study, calculation, and media capabilities",
+                "strata-beta": "general Strata capabilities plus experimental locally learned response patterns",
                 "volt": "writing-focused text analysis, formatting, supplied-text, and lightweight transformation capabilities",
                 "strata-code": "programming, code analysis, calculation, file/text, and technical research capabilities",
                 "sunken": "deep research, analysis, data, calculation, code-analysis, and source-reading capabilities",
