@@ -320,6 +320,7 @@ async def chat(req: Request):
 
     async def stream_response():
         yield f"data: {json.dumps({'type': 'status', 'message': 'Thinking...'})}\n\n"
+        simple_chat = (not image_data and not pasted_text and not extracted_document and len(message) <= 40 and message.lower().strip(" .!?,-") in {"hi", "hello", "hey", "yo", "hiya", "howdy", "good morning", "good afternoon", "good evening"})
 
         try:
             model_name = await client.highest_priced_model()
@@ -501,7 +502,8 @@ async def chat(req: Request):
                     pasted_text=request_pasted_text,
                     image_data=image_data,
                     on_tool=on_tool,
-                    reasoning_effort=("high" if thinking_mode == "deep" else "medium"),
+                    reasoning_effort=("high" if thinking_mode == "deep" else ("low" if simple_chat else "medium")),
+                    allow_tools=not simple_chat,
                 )
             )
 
