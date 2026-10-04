@@ -606,6 +606,11 @@ class GroqClient:
                         "required": ["path"],
                         "additionalProperties": False,
                     },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "calculator",
                     "description": "Safely evaluate a mathematical expression.",
                     "parameters": {
