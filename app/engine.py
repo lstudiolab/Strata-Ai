@@ -528,6 +528,25 @@ class GroqClient:
                 stack.pop()
         return json.dumps({"language": lang or "unknown", "task": task, "syntax": {"valid": not stack and quote is None, "error": "unclosed delimiter or string" if stack or quote else None}, "lines": len(source.splitlines()), "characters": len(source), "executed": False}, ensure_ascii=False)
 
+    async def get_text_file(self, path: str) -> str:
+        """Read a Strata-created temporary text file without executing it."""
+        from pathlib import Path
+        target = Path(str(path or "")).resolve()
+        root = Path("/tmp/strata_long_messages").resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            return "The requested text file is outside Strata's temporary message directory."
+        if not target.is_file():
+            return "The text file is no longer available."
+        try:
+            text = target.read_text(encoding="utf-8", errors="replace")
+            if len(text) > 160000:
+                text = text[:160000] + "\n[Text file truncated.]"
+            return text
+        except OSError as exc:
+            return f"Text file read error: {exc}"
+
     async def run_agent(
         self,
         model: str,
@@ -579,6 +598,14 @@ class GroqClient:
             {
                 "type": "function",
                 "function": {
+                    "name": "get_text_file",
+                    "description": "Read a long user message saved as a temporary UTF-8 text file.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string", "description": "Temporary text-file path supplied by Strata."}},
+                        "required": ["path"],
+                        "additionalProperties": False,
+                    },
                     "name": "calculator",
                     "description": "Safely evaluate a mathematical expression.",
                     "parameters": {
@@ -888,6 +915,8 @@ class GroqClient:
                             str(arguments.get("language", "")),
                             str(arguments.get("task", "review")),
                         )
+                    elif name == "get_text_file":
+                        result = await self.get_text_file(str(arguments.get("path", "")))
                     elif name == "calculator":
                         result = self._calculate(str(arguments.get("expression", "")))
                     elif name == "search_web":
