@@ -398,7 +398,7 @@ async def chat(req: Request):
 
         try:
             model_name = await client.highest_priced_model()
-            system_prompt = load_instructions(model_type)
+            system_prompt = load_instructions("strata" if model_type == "strata-beta" else model_type)
             capability_descriptions = {
                 "strata": "general web, navigation, weather, sports, market, research, study, calculation, and media capabilities",
                 "strata-beta": "general Strata capabilities plus experimental locally learned response patterns",
