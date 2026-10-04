@@ -982,7 +982,12 @@ messageInput.addEventListener("keydown", (event) => {
 });
 
 function applySettingsState() {
-  
+  thinkingOptions.forEach((button) => {
+    const active = (button.dataset.thinking || "fast") === selectedThinking;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
 
 thinkingOptions.forEach((button) => {
   button.addEventListener("click", () => {
