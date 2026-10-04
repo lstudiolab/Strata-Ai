@@ -19,9 +19,13 @@ const conversationList = document.getElementById("conversationList");
 const conversationClose = document.getElementById("conversationClose");
 const drawerBackdrop = document.getElementById("drawerBackdrop");
 const newConversationButton = document.getElementById("newConversationButton");
+const modelOptions = document.querySelectorAll(".model-option");
+const thinkingOptions = document.querySelectorAll(".thinking-option");
 
 let selectedAttachment = null;
 let selectedAttachmentData = "";
+let selectedModel = localStorage.getItem("strata_model") || "strata";
+let selectedThinking = localStorage.getItem("strata_thinking") || "fast";
 
 const API_BASE =
   (window.STRATA_API_URL || document.documentElement.dataset.apiBase || "")
@@ -376,7 +380,8 @@ async function sendMessage() {
       body: JSON.stringify({
         message,
         session_id: sessionId,
-        model_type: "strata",
+        model_type: selectedModel,
+        thinking_mode: selectedThinking,
         pasted_text: contextText,
         image_data: selectedAttachmentData,
         attachment_name: selectedAttachment?.name || "",
@@ -757,6 +762,37 @@ messageInput.addEventListener("keydown", (event) => {
     sendMessage();
   }
 });
+
+function applySettingsState() {
+  modelOptions.forEach((button) => {
+    const active = button.dataset.model === selectedModel;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  thinkingOptions.forEach((button) => {
+    const active = button.dataset.thinking === selectedThinking;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+modelOptions.forEach((button) => {
+  button.addEventListener("click", () => {
+    selectedModel = button.dataset.model || "strata";
+    localStorage.setItem("strata_model", selectedModel);
+    applySettingsState();
+  });
+});
+
+thinkingOptions.forEach((button) => {
+  button.addEventListener("click", () => {
+    selectedThinking = button.dataset.thinking || "fast";
+    localStorage.setItem("strata_thinking", selectedThinking);
+    applySettingsState();
+  });
+});
+
+applySettingsState();
 
 settingsButton?.addEventListener("click", openSettings);
 settingsClose?.addEventListener("click", closeSettings);
