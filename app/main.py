@@ -192,8 +192,7 @@ async def chat(req: Request):
 
     original_message = str(body.get("message", "")).strip()
     message = normalize_user_prompt(original_message)
-    pasted_text = str(body.get("pasted_text", "") or "").strip()
-    image_data = str(body.get("image_data", "") or "").strip()
+    pasted_text = str(body.get("pasted_text", "") or "").strip()\n    long_message_path = ""\n    if len(message) > 12000:\n        long_dir = Path("/tmp/strata_long_messages")\n        long_dir.mkdir(parents=True, exist_ok=True)\n        long_message_path = str(long_dir / f"{uuid.uuid4().hex}.txt")\n        Path(long_message_path).write_text(message, encoding="utf-8")\n        message = (\n            "The user's full message is stored in a temporary text file. "\n            "Use the get_text_file tool to read it before answering. "\n            f"Temporary file: {long_message_path}"\n        )\n    image_data = str(body.get("image_data", "") or "").strip()
     attachment_type = str(body.get("attachment_type", "") or "").strip()
     model_type = str(body.get("model_type", "strata") or "strata").strip()
     if model_type not in {"strata", "strata-code"}:
