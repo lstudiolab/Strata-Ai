@@ -167,6 +167,92 @@ class Memory:
             logger.exception("Failed to read messages after summary")
             return []
 
+
+    def relevant_messages(self, session_id: str, query: str, limit: int = 8) -> List[Tuple[int, str, str]]:
+        """Retrieve older conversation turns that are lexically relevant to the current request."""
+        try:
+            words = {
+                word.lower()
+                for word in __import__("re").findall(r"[A-Za-z0-9_]{4,}", str(query or ""))
+                if word.lower() not in {
+                    "what", "when", "where", "which", "with", "that", "this",
+                    "from", "have", "will", "would", "could", "should", "about",
+                    "please", "make", "help", "need", "want", "your", "into",
+                }
+            }
+            if not words:
+                return []
+            with self._connect() as db:
+                rows = db.execute(
+                    """
+                    SELECT id, role, content
+                    FROM messages
+                    WHERE session_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (session_id,),
+                ).fetchall()
+            ranked = []
+            for row_id, role, content in rows:
+                text = str(content or "")
+                lower = text.lower()
+                score = sum(lower.count(word) for word in words)
+                if score:
+                    ranked.append((score, int(row_id), role, text))
+            ranked.sort(key=lambda item: (-item[0], -item[1]))
+            return [(row_id, role, content) for _, row_id, role, content in ranked[:max(1, int(limit))]]
+        except sqlite3.Error:
+            logger.exception("Failed to retrieve relevant messages")
+            return []
+
+    def add_feedback(self, session_id: str, rating: str, note: str = "", message_id: int = 0) -> bool:
+        """Store explicit user feedback for future response-quality improvements."""
+        if rating not in {"positive", "negative"}:
+            raise ValueError(f"Unsupported feedback rating: {rating}")
+        try:
+            with self._connect() as db:
+                db.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS feedback (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT NOT NULL,
+                        message_id INTEGER NOT NULL DEFAULT 0,
+                        rating TEXT NOT NULL CHECK(rating IN ('positive', 'negative')),
+                        note TEXT NOT NULL DEFAULT '',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                    )
+                    """
+                )
+                db.execute(
+                    "INSERT INTO feedback(session_id, message_id, rating, note) VALUES(?, ?, ?, ?)",
+                    (session_id, int(message_id or 0), rating, str(note or "")[:1000]),
+                )
+                db.commit()
+            return True
+        except sqlite3.Error:
+            logger.exception("Failed to store feedback")
+            return False
+
+    def feedback(self, session_id: str, limit: int = 10) -> List[Tuple[str, str]]:
+        """Return recent user feedback notes for the current conversation."""
+        try:
+            with self._connect() as db:
+                rows = db.execute(
+                    """
+                    SELECT rating, note
+                    FROM feedback
+                    WHERE session_id = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (session_id, max(1, int(limit))),
+                ).fetchall()
+                return [(row[0], row[1]) for row in rows]
+        except sqlite3.Error:
+            logger.exception("Failed to read feedback")
+            return []
+
     def latest_message_id(self, session_id: str) -> int:
         try:
             with self._connect() as db:
