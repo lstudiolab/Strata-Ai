@@ -883,7 +883,7 @@ class GroqClient:
 
         timeout = aiohttp.ClientTimeout(total=180, sock_connect=30, sock_read=None)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            for round_number in range(10):
+            for round_number in range(2):
                 import logging
                 logging.getLogger("strata").info(
                     "Groq API request: model=%s round=%d messages=%d",
@@ -922,7 +922,7 @@ class GroqClient:
                             delay = max(1.0, min(30.0, float(retry_after)))
                         except (TypeError, ValueError):
                             delay = 2.0
-                        if round_number < 9:
+                        if round_number < 1:
                             await asyncio.sleep(delay)
                             continue
                         raise RuntimeError(
