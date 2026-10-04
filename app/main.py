@@ -193,7 +193,7 @@ async def get_models():
         except Exception:
             logger.exception("Unable to resolve the Strata model")
     return {"models": [
-        {"id": "strata", "name": "Strata", "version": "1.0", "description": "General-purpose assistant", "model": model_name},
+        {"id": "strata", "name": "Strata", "version": "1.0", "description": "General-purpose assistant", "model": model_name},\n        {"id": "strata-beta", "name": "Strata 1.0", "version": "Beta", "description": "Experimental learning model", "model": model_name},
         {"id": "strata-code", "name": "Strata Code", "version": "1.0", "description": "Programming and technical work", "model": model_name},
         {"id": "sunken", "name": "Sunken", "version": "1.0", "description": "Focused, analytical assistant", "model": model_name},
         {"id": "volt", "name": "Volt", "version": "1.0", "description": "Writing specialist", "model": model_name},
@@ -331,7 +331,7 @@ async def chat(req: Request):
     image_data = str(body.get("image_data", "") or "").strip()
     attachment_type = str(body.get("attachment_type", "") or "").strip()
     model_type = str(body.get("model_type", "strata") or "strata").strip()
-    if model_type not in {"strata", "strata-code", "sunken", "volt"}:
+    if model_type not in {"strata", "strata-beta", "strata-code", "sunken", "volt"}:
         model_type = "strata"
     thinking_mode = str(body.get("thinking_mode", "fast") or "fast").strip()
     if thinking_mode not in {"fast", "deep"}:
