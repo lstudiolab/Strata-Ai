@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(Strata11 LANGUAGES CXX)
+project(StrataAI LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-add_executable(strata11 src/main.cpp src/Learner.cpp src/Instructions.cpp)
-target_include_directories(strata11 PRIVATE include)
-if (MSVC)
-  target_compile_options(strata11 PRIVATE /W4)
-else()
-  target_compile_options(strata11 PRIVATE -Wall -Wextra -Wpedantic -O2)
+add_executable(strata
+ src/main.cpp
+ src/Model.cpp
+)
+target_include_directories(strata PRIVATE include)
+if(NOT MSVC)
+ target_compile_options(strata PRIVATE -O2 -Wall -Wextra -Wpedantic)
 endif()
