@@ -30,6 +30,13 @@ const modelOptions = document.querySelectorAll(".model-option");
 const thinkingOptions = document.querySelectorAll(".thinking-option");
 const reasoningSlider = document.getElementById("reasoningSlider");
 const reasoningPercent = document.getElementById("reasoningPercent");
+
+let selectedAttachment = null;
+let selectedAttachmentData = "";
+let selectedModel = localStorage.getItem("strata_model") || "strata";
+let selectedThinking = localStorage.getItem("strata_thinking") || "fast";
+let reasoningLevel = Number(localStorage.getItem("strata_reasoning_level") || "50");
+
 function applyReasoningLevel(value) {
   reasoningLevel = Math.max(0, Math.min(100, Number(value) || 0));
   localStorage.setItem("strata_reasoning_level", String(reasoningLevel));
@@ -41,12 +48,6 @@ if (reasoningSlider) {
   reasoningSlider.addEventListener("input", (event) => applyReasoningLevel(event.target.value));
   applyReasoningLevel(reasoningLevel);
 }
-
-let selectedAttachment = null;
-let selectedAttachmentData = "";
-let selectedModel = localStorage.getItem("strata_model") || "strata";
-let selectedThinking = localStorage.getItem("strata_thinking") || "fast";
-let reasoningLevel = Number(localStorage.getItem("strata_reasoning_level") || "50");
 let activeProjectId = localStorage.getItem("strata_project_id") || "";
 
 const API_BASE =
