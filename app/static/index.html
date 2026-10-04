@@ -13,6 +13,7 @@
         <div class="header-content">
           <h1>Strata</h1>
           <div class="header-actions">
+            <button id="conversationButton" class="glass-icon-button" type="button" aria-label="Conversations">☰</button>
             <button id="tokenMeterButton" class="token-meter-button" type="button" aria-label="Token usage">
               <span class="token-meter-ring" aria-hidden="true"><span id="tokenMeterFill"></span></span>
               <span id="tokenMeterPercent">—</span>
@@ -21,6 +22,24 @@
           </div>
         </div>
       </header>
+
+      <aside id="conversationDrawer" class="conversation-drawer" aria-hidden="true">
+        <div class="conversation-drawer-header">
+          <button id="conversationClose" class="drawer-back-button" type="button" aria-label="Back to chat">‹</button>
+          <div>
+            <h2>Conversations</h2>
+            <p id="activeProjectLabel">All conversations</p>
+          </div>
+        </div>
+        <button id="newConversationButton" class="drawer-primary-button" type="button">New conversation</button>
+        <div class="drawer-section-title">Projects</div>
+        <button id="newProjectButton" class="project-create-button" type="button">New project</button>
+        <div id="projectList" class="project-list"></div>
+        <div class="drawer-section-title">Conversations</div>
+        <div id="conversationList" class="conversation-list"></div>
+      </aside>
+
+      <div id="drawerBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
 
       <aside id="settingsPanel" class="settings-panel" aria-hidden="true">
         <div class="settings-header">
@@ -47,11 +66,6 @@
           <span>Automatic</span>
         </div>
         <p class="settings-note">There is no fixed conversation limit. Strata automatically compacts older context when needed while keeping the full conversation history.</p>
-        <div class="settings-section">
-          <div class="settings-section-title">Conversations</div>
-          <button id="newConversationButton" class="new-conversation-button" type="button">New conversation</button>
-          <div id="conversationList" class="conversation-list settings-conversation-list"></div>
-        </div>
       </aside>
 
       <main class="chat-container" aria-label="Strata conversation">
