@@ -324,6 +324,13 @@ async def chat(req: Request):
         try:
             model_name = await client.highest_priced_model()
             system_prompt = load_instructions(model_type)
+            project = mem.get_project(project_id) if project_id else None
+            if project:
+                system_prompt += (
+                    "\n\nActive Strata project context. This conversation belongs to the user's project "
+                    + repr(project["name"]) + ". Project description: " + repr(project["description"])
+                    + ". Keep project continuity in mind and treat the project description as user-provided context."
+                )
             tool_events: asyncio.Queue = asyncio.Queue()
 
             # Message understanding is handled inside the main Strata request.
