@@ -27,6 +27,20 @@
           <h2>Settings</h2>
           <button id="settingsClose" class="drawer-close" type="button" aria-label="Close">×</button>
         </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Assistant</div>
+          <div class="model-picker" role="group" aria-label="Assistant">
+            <button class="model-option active" type="button" data-model="strata"><span class="model-option-name">Strata</span><span class="model-option-description">General assistant</span></button>
+            <button class="model-option" type="button" data-model="strata-code"><span class="model-option-name">Strata Code</span><span class="model-option-description">Programming and technical work</span></button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Thinking</div>
+          <div class="thinking-picker" role="group" aria-label="Thinking speed">
+            <button class="thinking-option active" type="button" data-thinking="fast"><span class="thinking-option-name">Think faster</span><span class="thinking-option-description">Quicker responses</span></button>
+            <button class="thinking-option" type="button" data-thinking="deep"><span class="thinking-option-name">Deep thinking</span><span class="thinking-option-description">More reasoning before answering</span></button>
+          </div>
+        </div>
         <div class="setting-row">
           <span>Memory</span>
           <span>Automatic</span>
@@ -49,7 +63,7 @@
           <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
           <input
             id="messageInput"
-            class="message-input"
+            class="message-input glass-input"
             type="text"
             placeholder="Message Strata"
             autocomplete="off"
