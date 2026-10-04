@@ -933,3 +933,50 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .send-button.stop-generating:hover { background: #2f2f33; }
 .send-button.stop-generating:active::before { transform: scale(.7); }
+
+
+/* Glass typing state */
+.input-wrapper {
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(24px) saturate(120%);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  transition: background .24s ease, border-color .24s ease, box-shadow .24s ease, transform .24s cubic-bezier(.22,1,.36,1);
+}
+.input-wrapper:has(.message-input:not(:placeholder-shown)) {
+  background: rgba(255,255,255,.58);
+  border-color: rgba(255,255,255,.72);
+  box-shadow: 0 12px 38px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.8);
+}
+.input-wrapper:focus-within:has(.message-input:not(:placeholder-shown)) {
+  background: rgba(255,255,255,.52);
+  box-shadow: 0 14px 42px rgba(0,0,0,.085), inset 0 1px 0 rgba(255,255,255,.86);
+}
+.glass-input { text-shadow: 0 1px 8px rgba(0,0,0,.035); }
+
+/* Model and thinking selectors */
+.settings-section + .settings-section { margin-top: 14px; }
+.model-picker, .thinking-picker { display: grid; gap: 7px; }
+.model-option, .thinking-option {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid rgba(0,0,0,.055);
+  border-radius: 13px;
+  background: rgba(248,248,249,.72);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, transform .18s cubic-bezier(.22,1,.36,1);
+}
+.model-option:hover, .thinking-option:hover { background: rgba(255,255,255,.82); transform: translateY(-1px); }
+.model-option.active, .thinking-option.active {
+  background: rgba(0,0,0,.055);
+  border-color: rgba(0,0,0,.12);
+}
+.model-option-name, .thinking-option-name { display: block; font-size: 12px; font-weight: 650; }
+.model-option-description, .thinking-option-description {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
