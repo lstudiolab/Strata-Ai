@@ -513,7 +513,7 @@ class GroqClient:
             if quote:
                 if escaped:
                     escaped = False
-                elif char == "\":
+                elif char == "\\":
                     escaped = True
                 elif char == quote:
                     quote = None
