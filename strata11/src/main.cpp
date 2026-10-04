@@ -9,6 +9,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unordered_set>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -199,20 +200,136 @@ static bool serve_static(int fd, const std::string& path) {
     return true;
 }
 
+struct MemoryEntry {
+    std::string prompt;
+    std::string answer;
+};
+
+static std::mutex memory_mutex;
+static std::vector<MemoryEntry> memories;
+
+static void append_memory(const std::string& file, const MemoryEntry& entry) {
+    std::ofstream out(file, std::ios::app);
+    if (!out) return;
+    out << entry.prompt.size() << "\n" << entry.prompt
+        << entry.answer.size() << "\n" << entry.answer << "\n";
+}
+
+static void load_memories(const std::string& file) {
+    std::ifstream in(file);
+    if (!in) return;
+
+    while (true) {
+        size_t prompt_size = 0;
+        size_t answer_size = 0;
+        if (!(in >> prompt_size)) break;
+        in.get();
+        std::string prompt(prompt_size, '\\0');
+        in.read(prompt.data(), static_cast<std::streamsize>(prompt_size));
+        if (!in.get()) break;
+        if (!(in >> answer_size)) break;
+        in.get();
+        std::string answer(answer_size, '\\0');
+        in.read(answer.data(), static_cast<std::streamsize>(answer_size));
+        if (!in.get()) break;
+        memories.push_back({std::move(prompt), std::move(answer)});
+    }
+}
+
+static std::string lower_copy(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+static std::string memory_context(const std::string& prompt) {
+    std::lock_guard<std::mutex> lock(memory_mutex);
+    if (memories.empty()) return {};
+
+    const std::string query = lower_copy(prompt);
+    std::ostringstream context;
+    context << "Remembered conversation:\n";
+
+    size_t added = 0;
+    // Prefer memories that share words with the current prompt.
+    for (auto it = memories.rbegin(); it != memories.rend() && added < 12; ++it) {
+        const std::string p = lower_copy(it->prompt);
+        bool relevant = false;
+        size_t begin = 0;
+        while (begin < query.size()) {
+            while (begin < query.size() && !std::isalnum(static_cast<unsigned char>(query[begin]))) ++begin;
+            size_t finish = begin;
+            while (finish < query.size() && std::isalnum(static_cast<unsigned char>(query[finish]))) ++finish;
+            if (finish > begin && finish - begin >= 3 && p.find(query.substr(begin, finish - begin)) != std::string::npos) {
+                relevant = true;
+                break;
+            }
+            begin = finish;
+        }
+        if (relevant) {
+            context << "User: " << it->prompt << "\nStrata: " << it->answer << "\n";
+            ++added;
+        }
+    }
+
+    // Always include the most recent turns so short follow-ups retain context.
+    for (auto it = memories.rbegin(); it != memories.rend() && added < 16; ++it) {
+        context << "User: " << it->prompt << "\nStrata: " << it->answer << "\n";
+        ++added;
+    }
+
+    return context.str();
+}
+
 static std::string train_on_experience(
     Model& model,
     const std::string& prompt,
     const std::string& answer,
-    const std::string& checkpoint
+    const std::string& checkpoint,
+    const std::string& memory_file
 ) {
-    const std::string experience = "User: " + prompt + "\nStrata: " + answer + "\n";
+    const MemoryEntry entry{prompt, answer};
+    {
+        std::lock_guard<std::mutex> lock(memory_mutex);
+        memories.push_back(entry);
+        append_memory(memory_file, entry);
+    }
+
+    const std::string experience =
+        "User: " + prompt + "\nStrata: " + answer + "\n";
+
     std::vector<unsigned char> training(experience.begin(), experience.end());
 
-    const float loss = model.train(training, 0.0003f);
+    float total_loss = 0.0f;
+    constexpr int replay_passes = 3;
+    for (int pass = 0; pass < replay_passes; ++pass) {
+        total_loss += model.train(training, 0.0005f);
+    }
+
+    // Replay older examples as well. This reduces catastrophic forgetting.
+    std::vector<MemoryEntry> replay;
+    {
+        std::lock_guard<std::mutex> lock(memory_mutex);
+        const size_t count = std::min<size_t>(memories.size(), 32);
+        replay.assign(memories.end() - count, memories.end());
+    }
+
+    size_t replayed = 0;
+    for (const auto& item : replay) {
+        const std::string sample = "User: " + item.prompt + "\nStrata: " + item.answer + "\n";
+        std::vector<unsigned char> tokens(sample.begin(), sample.end());
+        total_loss += model.train(tokens, 0.0002f);
+        ++replayed;
+    }
+
     model.save(checkpoint);
 
     std::ostringstream out;
-    out << "loss=" << loss << " learned=" << training.size();
+    out << "loss=" << (replayed ? total_loss / (replay_passes + replayed) : total_loss / replay_passes)
+        << " learned=" << training.size()
+        << " replayed=" << replayed
+        << " memories=" << memories.size();
     return out.str();
 }
 
@@ -239,7 +356,7 @@ static std::string fallback_answer(const std::string& prompt) {
            "\n\nStrata is online. I am using the native C++ learning system for this conversation.";
 }
 
-static void client(int fd, Model& model, const std::string& checkpoint) {
+static void client(int fd, Model& model, const std::string& checkpoint, const std::string& memory_file) {
     std::string request;
     char buffer[16384];
 
@@ -311,7 +428,7 @@ static void client(int fd, Model& model, const std::string& checkpoint) {
 
         std::thread([prompt, answer, &model, checkpoint] {
             std::lock_guard<std::mutex> lock(model_mutex);
-            const auto info = train_on_experience(model, prompt, answer, checkpoint);
+            const auto info = train_on_experience(model, prompt, answer, checkpoint, memory_file);
             std::cout << "online learning: " << info << std::endl;
         }).detach();
 
@@ -418,7 +535,7 @@ int main(int argc, char** argv) {
     while (true) {
         const int fd = accept(server, nullptr, nullptr);
         if (fd >= 0) {
-            std::thread(client, fd, std::ref(model), checkpoint).detach();
+            std::thread(client, fd, std::ref(model), checkpoint, memory_file).detach();
         }
     }
 }
