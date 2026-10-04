@@ -478,6 +478,33 @@ async function sendMessage() {
       return;
     }
 
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+
+    // Native C++ Strata returns JSON for simple deployments; the Python
+    // compatibility server may also return JSON. Accept both JSON and SSE so
+    // the interface is coupled to the actual native runtime contract.
+    if (contentType.includes("application/json")) {
+      const payload = await response.json();
+      removeLastStatus();
+
+      if (payload.error) {
+        addMessage("assistant", String(payload.error));
+      } else {
+        const finalAnswer = String(payload.message || payload.response || payload.answer || "");
+        if (finalAnswer) {
+          assistantMessage = addMessage("assistant", finalAnswer);
+          assistantGroup = assistantMessage.parentElement;
+          renderAssistantMessage(assistantMessage, finalAnswer);
+          addResponseActions(assistantGroup, assistantMessage);
+          assistantGroup.classList.add("message-complete");
+          scrollToActive(assistantGroup, "smooth");
+        } else {
+          addMessage("assistant", "Strata received the request but returned no message.");
+        }
+      }
+      return;
+    }
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
