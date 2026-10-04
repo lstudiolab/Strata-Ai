@@ -160,11 +160,11 @@ async def run_training_cycle() -> bool:
 
 
 async def training_loop() -> None:
-    """Run one teacher lesson every minute without blocking chat requests."""
+    """Run one teacher lesson, then wait five seconds before the next lesson."""
     await asyncio.sleep(15)
     while True:
         try:
             await run_training_cycle()
         except Exception:
             logger.exception("Strata 1.0 training loop crashed")
-        await asyncio.sleep(60)
+        await asyncio.sleep(5)
