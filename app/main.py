@@ -47,7 +47,7 @@ def get_default_instructions() -> str:
 
 
 def load_instructions(model_type: str = "strata") -> str:
-    filename = "strata_code.md" if model_type == "strata-code" else ("sunken.md" if model_type == "sunken" else "strata.md")
+    filename = "strata_code.md" if model_type == "strata-code" else ("sunken.md" if model_type == "sunken" else ("volt.md" if model_type == "volt" else "strata.md"))
     path = INSTRUCTIONS_DIR / filename
     if path.is_file():
         text = path.read_text(encoding="utf-8").strip()
@@ -131,6 +131,7 @@ async def get_models():
         {"id": "strata", "name": "Strata", "version": "1.0", "description": "General-purpose assistant", "model": model_name},
         {"id": "strata-code", "name": "Strata Code", "version": "1.0", "description": "Programming and technical work", "model": model_name},
         {"id": "sunken", "name": "Sunken", "version": "1.0", "description": "Focused, analytical assistant", "model": model_name},
+        {"id": "volt", "name": "Volt", "version": "1.0", "description": "Fast-response assistant", "model": model_name},
     ], "thinking_modes": [
         {"id": "fast", "name": "Think faster", "description": "Quicker responses"},
         {"id": "deep", "name": "Deep thinking", "description": "More reasoning before answering"},
@@ -265,7 +266,7 @@ async def chat(req: Request):
     image_data = str(body.get("image_data", "") or "").strip()
     attachment_type = str(body.get("attachment_type", "") or "").strip()
     model_type = str(body.get("model_type", "strata") or "strata").strip()
-    if model_type not in {"strata", "strata-code", "sunken"}:
+    if model_type not in {"strata", "strata-code", "sunken", "volt"}:
         model_type = "strata"
     thinking_mode = str(body.get("thinking_mode", "fast") or "fast").strip()
     if thinking_mode not in {"fast", "deep"}:
