@@ -44,6 +44,12 @@ TOOL_CATALOG = {
 # own capability set. This keeps specialist models focused and prevents one
 # assistant from accidentally reaching another assistant's tool domain.
 MODEL_TOOLSETS = {
+    "strata-beta": {
+        "browser_search", "search_web", "open_webpage", "deep_research",
+        "calculator", "get_current_time", "format_json", "study",
+        "get_navigation_links", "get_weather", "get_sports", "get_stock_quote",
+        "unit_convert", "analyze_image", "get_pasted_text", "get_text_file",
+    },
     "strata": {
         "browser_search", "search_web", "open_webpage", "deep_research",
         "calculator", "get_current_time", "format_json", "study",
