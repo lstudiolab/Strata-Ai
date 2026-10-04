@@ -15,7 +15,7 @@ import aiohttp
 from app.config import GEMINI_API_KEY
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-DEFAULT_MODEL = "minimaxai/minimax-m2.7"
+DEFAULT_MODEL = "openai/gpt-oss-120b"
 VISION_MODEL = "qwen/qwen3.8-27b"
 
 TOOL_CATALOG = {
@@ -87,7 +87,7 @@ class GroqClient:
         }
 
     async def highest_priced_model(self) -> str:
-        """Return Strata's configured flagship Groq model."""
+        """Return Strata's configured flagship Groq production model."""
         return DEFAULT_MODEL
 
     @staticmethod
@@ -113,12 +113,11 @@ class GroqClient:
             "messages": messages,
             "stream": False,
             "max_completion_tokens": max_tokens,
-            "temperature": 1.0 if model == DEFAULT_MODEL else temperature,
-            "top_p": 0.95 if model == DEFAULT_MODEL else 0.9,
+            "temperature": temperature,
+            "top_p": 0.9,
+            "reasoning_effort": "low",
             "tool_choice": tool_choice,
         }
-        if model != DEFAULT_MODEL:
-            payload["reasoning_effort"] = "low"
         if tools:
             payload["tools"] = tools
 
@@ -851,20 +850,18 @@ class GroqClient:
                     round_number + 1,
                     len(working),
                 )
-                active_model = model or DEFAULT_MODEL
                 payload = {
-                    "model": active_model,
+                    "model": model or DEFAULT_MODEL,
                     "messages": working,
                     "stream": False,
-                    # MiniMax M2.7 uses native interleaved thinking rather than
-                    # Groq's GPT-OSS reasoning_effort control.
+                    # Keep the normal answer generous, but reserve enough of the
+                    # free-tier token budget for the prompt itself and reasoning.
                     "max_completion_tokens": self._agent_completion_budget(working, reasoning_effort),
-                    "temperature": 1.0 if active_model == DEFAULT_MODEL else 0.7,
-                    "top_p": 0.95 if active_model == DEFAULT_MODEL else 0.9,
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "reasoning_effort": reasoning_effort if reasoning_effort in {"low", "medium", "high"} else "medium",
                     "tool_choice": "auto",
                 }
-                if active_model != DEFAULT_MODEL:
-                    payload["reasoning_effort"] = reasoning_effort if reasoning_effort in {"low", "medium", "high"} else "medium"
                 if tools:
                     payload["tools"] = tools
 
