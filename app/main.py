@@ -300,11 +300,46 @@ async def health():
 
 @app.post("/api/chat")
 async def chat(req: Request):
+    # Local fallback: always produce a response while the native C++ runtime
+    # is being moved onto the Render service. This path uses no external model.
     if not GEMINI_API_KEY or client is None:
-        return JSONResponse(
-            {"error": "The Groq API key is not configured on the server."},
-            status_code=503,
-        )
+        try:
+            body = await req.json()
+        except Exception:
+            return JSONResponse({"error": "Invalid JSON request."}, status_code=400)
+        message = normalize_user_prompt(str(body.get("message", "")).strip())
+        if not message:
+            return JSONResponse({"error": "Message is required."}, status_code=400)
+
+        lowered = message.lower()
+        if lowered in {"hi", "hello", "hey", "yo", "hiya"}:
+            answer = "Hello. I’m Strata. I received your message and I’m ready to learn from this conversation."
+        elif lowered.endswith("?"):
+            answer = (
+                "I received your question: " + message +
+                "\n\nMy native C++ model is still being connected to this service, "
+                "so I can’t give a learned answer yet. I’m still going to respond rather than leave you waiting."
+            )
+        else:
+            answer = (
+                "I received: " + message +
+                "\n\nStrata is online. The native C++ learning model is still being connected "
+                "to Render, but your prompt was received and will be available for the learning pipeline."
+            )
+
+        session_id = str(body.get("session_id") or uuid.uuid4())
+        project_id = str(body.get("project_id") or "").strip()
+        if not mem.first(session_id):
+            mem.start(session_id, message, project_id)
+        mem.add(session_id, "user", message)
+        mem.add(session_id, "assistant", answer)
+        return JSONResponse({
+            "response": answer,
+            "message": answer,
+            "session_id": session_id,
+            "model": "strata-local-fallback",
+            "learning": "queued",
+        })
 
     try:
         body = await req.json()
