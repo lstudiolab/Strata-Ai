@@ -56,11 +56,12 @@
           </div>
         </div>
         <div class="settings-section">
-          <div class="settings-section-title">Thinking</div>
-          <div class="thinking-picker" role="group" aria-label="Thinking speed">
-            <button class="thinking-option active" type="button" data-thinking="fast"><span class="thinking-option-name">Think faster</span><span class="thinking-option-description">Quicker responses</span></button>
-            <button class="thinking-option" type="button" data-thinking="deep"><span class="thinking-option-name">Deep thinking</span><span class="thinking-option-description">More reasoning before answering</span></button>
+          <div class="settings-section-title">Reasoning level</div>
+          <div class="reasoning-slider-row">
+            <input id="reasoningSlider" class="reasoning-slider" type="range" min="0" max="100" step="1" value="50" aria-label="AI reasoning level" />
+            <span id="reasoningPercent" class="reasoning-percent">50%</span>
           </div>
+          <p class="settings-note reasoning-note">Choose how much reasoning Strata uses before answering. Higher levels can take longer.</p>
         </div>
         <div class="setting-row">
           <span>Memory</span>
