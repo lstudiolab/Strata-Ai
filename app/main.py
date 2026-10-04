@@ -428,7 +428,8 @@ async def chat(req: Request):
                     "study": "Building a study session...",
                     "discover_tools": "Choosing the right capability...",
                     "analyze_image": "Analyzing the image...",
-                    "get_navigation_links": "Preparing navigation...",\n                    "get_text_file": "Reading the long message...",
+                    "get_navigation_links": "Preparing navigation...",
+                    "get_text_file": "Reading the long message...",
                 }
                 await tool_events.put({
                     "message": labels.get(name, f"Using {name}...")
