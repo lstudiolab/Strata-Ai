@@ -2,6 +2,8 @@ import asyncio
 import base64
 import json
 import logging
+import os
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -34,6 +36,45 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 mem = Memory(DB_PATH)
+
+STRATA11_BINARY = Path(os.environ.get("STRATA11_BINARY", BASE_DIR.parent / "strata11" / "build" / "strata11"))
+STRATA11_LEARNING_DB = Path(os.environ.get("STRATA11_LEARNING_DB", "/tmp/strata11-learning.tsv"))
+
+def strata11_context(question: str) -> str:
+    """Retrieve learned response patterns from the local C++ Strata 1.1 learner."""
+    if not question or not STRATA11_BINARY.exists():
+        return ""
+    try:
+        result = subprocess.run(
+            [str(STRATA11_BINARY), "--mode", "context", "--db", str(STRATA11_LEARNING_DB)],
+            input=question,
+            text=True,
+            capture_output=True,
+            timeout=2,
+            check=False,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception:
+        logger.exception("Strata 1.1 context retrieval failed")
+        return ""
+
+async def strata11_learn(assistant: str, question: str, answer: str) -> None:
+    """Teach the local C++ learner from the completed teacher response."""
+    if not answer or not STRATA11_BINARY.exists():
+        return
+    try:
+        STRATA11_LEARNING_DB.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(
+            subprocess.run,
+            [str(STRATA11_BINARY), "--mode", "learn", "--db", str(STRATA11_LEARNING_DB)],
+            input=assistant + "\n" + question + "\n" + answer,
+            text=True,
+            capture_output=True,
+            timeout=3,
+            check=False,
+        )
+    except Exception:
+        logger.exception("Strata 1.1 learning pass failed")
 
 
 def get_default_instructions() -> str:
@@ -405,6 +446,15 @@ async def chat(req: Request):
             # original message. Context is compacted by message count OR total text
             # size so very long messages cannot silently overflow the model context.
             feedback_items = mem.feedback(session_id, limit=10)
+            learned_context = strata11_context(original_message)
+            if learned_context:
+                system_prompt += (
+                    "\n\nStrata 1.1 learned knowledge. These are patterns learned locally "
+                    "from previous completed Strata responses. Use them as experience, not as "
+                    "authoritative facts. Do not copy them blindly; improve on them when needed:\n"
+                    + learned_context
+                )
+
             if feedback_items:
                 feedback_text = "\n".join(
                     f"- {rating}: {note}" for rating, note in feedback_items if note.strip()
@@ -547,6 +597,10 @@ async def chat(req: Request):
             # client disconnect or refresh cannot lose the completed response.
             mem.add(session_id, "model", answer)
 
+            # Teach Strata 1.1 in the background from the completed teacher response.
+            # This uses only local C++ code and makes no API/model request.
+            asyncio.create_task(strata11_learn(model_type, original_message, answer))
+
             # Keep the clean streaming feel in the UI after agent/tool work.
             # Chunking is only for transport/UI responsiveness. The complete answer
             # is always sent again in the authoritative "answer" event below.
@@ -555,7 +609,6 @@ async def chat(req: Request):
             for index in range(0, len(answer), chunk_size):
                 yield f"data: {json.dumps({'type': 'delta', 'message': answer[index:index + chunk_size]})}\n\n"
 
-            mem.add(session_id, "model", answer)
             yield f"data: {json.dumps({'type': 'answer', 'message': answer})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
             if long_message_path:
