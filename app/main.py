@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import CORS_ORIGINS, DB_PATH, GEMINI_API_KEY, HOST, PORT
 from app.engine import client
 from app.memory import Memory
+from app.trainer import training_loop
 
 logger = logging.getLogger("strata")
 logging.basicConfig(level=logging.INFO)
@@ -25,6 +26,25 @@ STATIC_DIR = BASE_DIR / "static"
 INSTRUCTIONS_DIR = BASE_DIR / "instructions"
 
 app = FastAPI(title="Strata AI", version="1.0.0")
+_training_task = None
+
+@app.on_event("startup")
+async def start_continuous_training():
+    global _training_task
+    if os.environ.get("STRATA_CONTINUOUS_TRAINING", "1").lower() not in {"0", "false", "off", "no"}:
+        _training_task = asyncio.create_task(training_loop())
+        logger.info("Strata 1.0 continuous teacher training enabled (one lesson per minute).")
+
+@app.on_event("shutdown")
+async def stop_continuous_training():
+    global _training_task
+    if _training_task:
+        _training_task.cancel()
+        try:
+            await _training_task
+        except asyncio.CancelledError:
+            pass
+        _training_task = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,10 +58,10 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 mem = Memory(DB_PATH)
 
 STRATA11_BINARY = Path(os.environ.get("STRATA11_BINARY", BASE_DIR.parent / "strata11" / "build" / "strata11"))
-STRATA11_LEARNING_DB = Path(os.environ.get("STRATA11_LEARNING_DB", "/tmp/strata11-learning.tsv"))
+STRATA11_LEARNING_DB = Path(os.environ.get("STRATA11_LEARNING_DB", BASE_DIR.parent / "strata11" / "data" / "learning.tsv"))
 
-def strata11_context(question: str) -> str:
-    """Retrieve learned response patterns from the local C++ Strata 1.1 learner."""
+def strata10_context(question: str) -> str:
+    """Retrieve learned response patterns from the local C++ Strata 1.0 learner."""
     if not question or not STRATA11_BINARY.exists():
         return ""
     try:
@@ -58,7 +78,7 @@ def strata11_context(question: str) -> str:
         logger.exception("Strata 1.1 context retrieval failed")
         return ""
 
-async def strata11_learn(assistant: str, question: str, answer: str) -> None:
+async def strata10_learn(assistant: str, question: str, answer: str) -> None:
     """Teach the local C++ learner from the completed teacher response."""
     if not answer or not STRATA11_BINARY.exists():
         return
@@ -173,7 +193,7 @@ async def get_models():
         except Exception:
             logger.exception("Unable to resolve the Strata model")
     return {"models": [
-        {"id": "strata", "name": "Strata", "version": "1.1", "description": "General-purpose assistant", "model": model_name},
+        {"id": "strata", "name": "Strata", "version": "1.0", "description": "General-purpose assistant", "model": model_name},
         {"id": "strata-code", "name": "Strata Code", "version": "1.0", "description": "Programming and technical work", "model": model_name},
         {"id": "sunken", "name": "Sunken", "version": "1.0", "description": "Focused, analytical assistant", "model": model_name},
         {"id": "volt", "name": "Volt", "version": "1.0", "description": "Writing specialist", "model": model_name},
@@ -451,7 +471,7 @@ async def chat(req: Request):
             # size so very long messages cannot silently overflow the model context.
             feedback_items = mem.feedback(session_id, limit=10)
             # Give the model Strata 1.1's built-in conversational intelligence on every request.
-            strata11_instructions = ""
+            strata10_instructions = ""
             if STRATA11_BINARY.exists():
                 try:
                     instruction_result = await asyncio.to_thread(
