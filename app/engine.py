@@ -867,9 +867,9 @@ class GroqClient:
                     # Allow a short tool pass, then force synthesis. This prevents
                     # the model from repeatedly selecting tools and leaving the UI on
                     # "Thinking..." for ordinary requests.
-                    "tool_choice": "auto" if round_number < 2 else "none",
+                    "tool_choice": "auto" if round_number == 0 else "none",
                 }
-                if tools and round_number < 2:
+                if tools and round_number == 0:
                     payload["tools"] = tools
 
                 async with session.post(
