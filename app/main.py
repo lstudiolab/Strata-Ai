@@ -426,17 +426,19 @@ async def chat(req: Request):
                 except Exception:
                     logger.exception("Conversation memory compaction failed")
 
-            history = mem.history(session_id, limit=32)
+            # Build a reliable short-term conversation window on every request.
+            # The previous implementation could let very large tool/system context
+            # crowd recent turns out of the model context. The database still keeps
+            # the complete transcript, while the model always receives the latest
+            # exchanges plus durable memory.
+            history = mem.history(session_id, limit=48)
 
             # mem.add() stores the current user turn before generation. Do not add
             # that same turn a second time through the conversation anchor.
             if history and history[-1][0] == "user" and history[-1][1] == original_message:
                 history = history[:-1]
 
-            # Keep recent context generous enough for long messages while still
-            # reserving room for the system instructions, tools, and current turn.
-            # Older turns remain safely stored and are represented by memory_summary.
-            context_chars = 110_000
+            context_chars = 30_000
             selected_history = []
             used_chars = 0
             for role, content in reversed(history):
@@ -453,6 +455,21 @@ async def chat(req: Request):
                 message,
                 memory_summary,
             )
+
+            # Make continuity explicit so the model treats the immediately
+            # preceding user/assistant turns as active conversation, not optional
+            # search results.
+            if selected_history:
+                messages.insert(0, {
+                    "role": "system",
+                    "content": (
+                        "Recent conversation continuity is required. The conversation turns "
+                        "below are real prior messages from this same session. Use them when "
+                        "answering follow-ups, references such as 'that', 'it', 'he', 'she', "
+                        "or 'the thing we discussed', and corrections. Do not claim you cannot "
+                        "remember a previous turn when it is present here."
+                    ),
+                })
 
             async def on_tool(name: str, round_number: int):
                 labels = {
@@ -501,6 +518,10 @@ async def chat(req: Request):
             answer = await agent_task
             if not answer:
                 answer = "I couldn't generate a response. Please try again."
+
+            # Persist the assistant turn before transport streaming finishes so a
+            # client disconnect or refresh cannot lose the completed response.
+            mem.add(session_id, "model", answer)
 
             # Keep the clean streaming feel in the UI after agent/tool work.
             # Chunking is only for transport/UI responsiveness. The complete answer
