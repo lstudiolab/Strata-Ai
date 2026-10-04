@@ -7,6 +7,9 @@ const sendButton = document.getElementById("sendButton");
 const chatForm = document.getElementById("chatForm");
 const attachmentButton = document.getElementById("attachmentButton");
 const fileInput = document.getElementById("fileInput");
+const cameraInput = document.getElementById("cameraInput");
+const photoInput = document.getElementById("photoInput");
+const attachmentMenu = document.getElementById("attachmentMenu");
 const attachmentPreview = document.getElementById("attachmentPreview");
 const tokenMeterButton = document.getElementById("tokenMeterButton");
 const tokenMeterPercent = document.getElementById("tokenMeterPercent");
@@ -703,35 +706,70 @@ function clearAttachment() {
   selectedAttachment = null;
   selectedAttachmentData = "";
   if (fileInput) fileInput.value = "";
+  if (cameraInput) cameraInput.value = "";
+  if (photoInput) photoInput.value = "";
   if (attachmentPreview) {
     attachmentPreview.hidden = true;
     attachmentPreview.innerHTML = "";
   }
 }
 
-attachmentButton?.addEventListener("click", () => fileInput?.click());
+function closeAttachmentMenu() {
+  attachmentMenu?.classList.remove("open");
+  attachmentMenu?.setAttribute("aria-hidden", "true");
+  attachmentButton?.setAttribute("aria-expanded", "false");
+}
 
-fileInput?.addEventListener("change", async () => {
-  const file = fileInput.files?.[0];
+function openAttachmentMenu() {
+  attachmentMenu?.classList.add("open");
+  attachmentMenu?.setAttribute("aria-hidden", "false");
+  attachmentButton?.setAttribute("aria-expanded", "true");
+}
+
+attachmentButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (attachmentMenu?.classList.contains("open")) closeAttachmentMenu();
+  else openAttachmentMenu();
+});
+
+document.querySelectorAll(".attachment-menu-item").forEach((button) => {
+  button.addEventListener("click", () => {
+    closeAttachmentMenu();
+    const source = button.dataset.attachmentSource;
+    if (source === "camera") cameraInput?.click();
+    else if (source === "photos") photoInput?.click();
+    else if (source === "files") fileInput?.click();
+  });
+});
+
+document.addEventListener("click", (event) => {
+  if (attachmentMenu?.classList.contains("open") && !event.target.closest(".attachment-menu-wrap")) {
+    closeAttachmentMenu();
+  }
+});
+
+async function handleSelectedFile(file, input) {
   if (!file) return;
 
   const maxBytes = 10 * 1024 * 1024;
   if (file.size > maxBytes) {
     addMessage("assistant", "That file is too large. Please choose a file under 10 MB.");
-    fileInput.value = "";
+    if (input) input.value = "";
     return;
   }
 
-  if (!(file.type.startsWith("image/") || file.type.startsWith("text/") ||
-        ["application/json", "text/csv", "application/pdf"].includes(file.type))) {
-    addMessage("assistant", "That file type is not supported yet.");
-    fileInput.value = "";
+  const textExtensions = /\.(txt|md|markdown|json|csv|log|py|js|jsx|ts|tsx|html|css|xml|yaml|yml|toml|rs|cpp|cc|c|h|hpp|swift|java|go|rb|php|sql|sh)$/i;
+  const isImage = file.type.startsWith("image/");
+  const isText = file.type.startsWith("text/") || file.type === "application/json" || textExtensions.test(file.name);
+
+  if (!isImage && !isText) {
+    addMessage("assistant", "That file type is not supported yet. Choose a photo or a text/document file.");
+    if (input) input.value = "";
     return;
   }
 
   selectedAttachment = file;
-
-  if (file.type.startsWith("image/") || file.type === "application/pdf") {
+  if (isImage) {
     selectedAttachmentData = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
@@ -743,6 +781,17 @@ fileInput?.addEventListener("change", async () => {
   }
 
   renderAttachmentPreview();
+}
+
+[cameraInput, photoInput, fileInput].forEach((input) => {
+  input?.addEventListener("change", async () => {
+    try {
+      await handleSelectedFile(input.files?.[0], input);
+    } catch (_) {
+      addMessage("assistant", "I couldn't read that file.");
+      input.value = "";
+    }
+  });
 });
 
 
