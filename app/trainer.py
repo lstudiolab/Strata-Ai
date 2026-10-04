@@ -33,7 +33,7 @@ LEARNING_DB = Path(
         BASE_DIR / "strata11" / "data" / "learning.tsv",
     )
 )
-TEACHER_MODEL = os.environ.get("STRATA_TEACHER_MODEL", "llama-3.1-8b-instant")
+TEACHER_MODEL = os.environ.get("STRATA_TEACHER_MODEL", "openai/gpt-oss-20b")
 TEACHER_MAX_TOKENS = int(os.environ.get("STRATA_TEACHER_MAX_TOKENS", "2500"))
 
 TRAINING_DATASET = Path(
