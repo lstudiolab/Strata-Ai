@@ -864,9 +864,12 @@ class GroqClient:
                     "temperature": 0.7,
                     "top_p": 0.9,
                     "reasoning_effort": reasoning_effort if reasoning_effort in {"low", "medium", "high"} else "medium",
-                    "tool_choice": "auto",
+                    # Allow a short tool pass, then force synthesis. This prevents
+                    # the model from repeatedly selecting tools and leaving the UI on
+                    # "Thinking..." for ordinary requests.
+                    "tool_choice": "auto" if round_number < 2 else "none",
                 }
-                if tools:
+                if tools and round_number < 2:
                     payload["tools"] = tools
 
                 async with session.post(
