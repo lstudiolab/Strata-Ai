@@ -642,9 +642,9 @@ async def chat(req: Request):
             # client disconnect or refresh cannot lose the completed response.
             mem.add(session_id, "model", answer)
 
-            # Teach Strata 1.1 in the background from the completed teacher response.
+            # Teach Strata 1.0 in the background from the completed teacher response.
             # This uses only local C++ code and makes no API/model request.
-            asyncio.create_task(strata11_learn(model_type, original_message, answer))
+            asyncio.create_task(strata10_learn("strata-beta" if model_type == "strata-beta" else model_type, original_message, answer))
 
             # Keep the clean streaming feel in the UI after agent/tool work.
             # Chunking is only for transport/UI responsiveness. The complete answer
