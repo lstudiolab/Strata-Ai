@@ -326,6 +326,7 @@ async def chat(req: Request):
                     "format_json": "Formatting the JSON...",
                     "browser_search": "Searching the web...",
                     "code_interpreter": "Running code...",
+                    "analyze_code": "Analyzing the code...",
                     "search_web": "Searching the web...",
                     "deep_research": "Doing deep research...",
                     "study": "Building a study session...",
