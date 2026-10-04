@@ -1,4 +1,5 @@
 #include "strata11/Learner.hpp"
+#include "strata11/Instructions.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -31,6 +32,10 @@ static std::string decode64(const std::string& input){
 int main(int argc,char**argv){
     Learner learner(arg(argc,argv,"--db","strata11/data/learning.tsv"));
     const std::string mode=arg(argc,argv,"--mode","context");
+    if(mode=="instructions"){
+        std::cout<<Instructions::system_context(arg(argc,argv,"--question"))<<std::flush;
+        return 0;
+    }
     if(mode=="learn"){
         std::string assistant,question,answer;
         std::getline(std::cin,assistant);
