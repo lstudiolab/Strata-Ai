@@ -547,6 +547,15 @@ class GroqClient:
         except OSError as exc:
             return f"Text file read error: {exc}"
 
+
+    @staticmethod
+    def _agent_completion_budget(messages: list[dict], reasoning_effort: str) -> int:
+        input_chars = sum(len(str(message.get("content") or "")) for message in messages)
+        estimated_input_tokens = max(1, input_chars // 4)
+        available = max(1024, 7600 - estimated_input_tokens)
+        target = 6144 if reasoning_effort == "high" else 4096
+        return max(1024, min(target, available))
+
     async def run_agent(
         self,
         model: str,
@@ -817,7 +826,7 @@ class GroqClient:
                     "stream": False,
                     # Keep the normal answer generous, but reserve enough of the
                     # free-tier token budget for the prompt itself and reasoning.
-                    "max_completion_tokens": 4096 if sum(len(str(m.get("content") or "")) for m in working) < 14000 else 2048,
+                    "max_completion_tokens": self._agent_completion_budget(working, reasoning_effort),
                     "temperature": 0.7,
                     "top_p": 0.9,
                     "reasoning_effort": reasoning_effort if reasoning_effort in {"low", "high"} else "low",
