@@ -47,6 +47,18 @@ class Memory:
                 db.execute("ALTER TABLE sessions ADD COLUMN memory_summary TEXT NOT NULL DEFAULT ''")
             if "memory_summary_through" not in columns:
                 db.execute("ALTER TABLE sessions ADD COLUMN memory_summary_through INTEGER NOT NULL DEFAULT 0")
+            if "project_id" not in columns:
+                db.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS projects (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id)")
 
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id, id)"
@@ -65,18 +77,73 @@ class Memory:
             logger.exception("Failed to get first question")
             return None
 
-    def start(self, session_id: str, first_question: str) -> bool:
+    def start(self, session_id: str, first_question: str, project_id: str = "") -> bool:
         try:
             with self._connect() as db:
                 db.execute(
-                    "INSERT OR IGNORE INTO sessions(id, first_question) VALUES(?, ?)",
-                    (session_id, first_question),
+                    "INSERT OR IGNORE INTO sessions(id, first_question, project_id) VALUES(?, ?, ?)",
+                    (session_id, first_question, str(project_id or "")),
                 )
                 db.commit()
             return True
         except sqlite3.Error:
             logger.exception("Failed to start session")
             return False
+
+    def create_project(self, project_id: str, name: str, description: str = "") -> bool:
+        try:
+            with self._connect() as db:
+                db.execute("INSERT INTO projects(id, name, description) VALUES(?, ?, ?)",
+                           (project_id, str(name).strip()[:120], str(description or "").strip()[:1000]))
+                db.commit()
+            return True
+        except sqlite3.Error:
+            logger.exception("Failed to create project")
+            return False
+
+    def list_projects(self, limit: int = 100) -> List[dict]:
+        try:
+            with self._connect() as db:
+                rows = db.execute("""SELECT p.id, p.name, p.description, p.created_at, p.updated_at,
+                    COUNT(s.id) FROM projects p LEFT JOIN sessions s ON s.project_id = p.id
+                    GROUP BY p.id ORDER BY p.updated_at DESC, p.created_at DESC LIMIT ?""",
+                    (max(1, min(int(limit), 200)),)).fetchall()
+                return [{"id": r[0], "name": r[1], "description": r[2], "created_at": r[3],
+                         "updated_at": r[4], "conversation_count": r[5]} for r in rows]
+        except sqlite3.Error:
+            logger.exception("Failed to list projects")
+            return []
+
+    def get_project(self, project_id: str) -> Optional[dict]:
+        try:
+            with self._connect() as db:
+                row = db.execute("SELECT id, name, description, created_at, updated_at FROM projects WHERE id = ?",
+                                 (project_id,)).fetchone()
+                return {"id": row[0], "name": row[1], "description": row[2],
+                        "created_at": row[3], "updated_at": row[4]} if row else None
+        except sqlite3.Error:
+            logger.exception("Failed to get project")
+            return None
+
+    def project_conversations(self, project_id: str, limit: int = 100) -> List[dict]:
+        try:
+            with self._connect() as db:
+                rows = db.execute("""SELECT s.id, s.first_question, s.created_at, COUNT(m.id)
+                    FROM sessions s LEFT JOIN messages m ON m.session_id = s.id
+                    WHERE s.project_id = ? GROUP BY s.id ORDER BY s.created_at DESC LIMIT ?""",
+                    (project_id, max(1, min(int(limit), 200)))).fetchall()
+                return [{"id": r[0], "title": r[1], "created_at": r[2], "message_count": r[3]} for r in rows]
+        except sqlite3.Error:
+            logger.exception("Failed to list project conversations")
+            return []
+
+    def project_id_for_session(self, session_id: str) -> str:
+        try:
+            with self._connect() as db:
+                row = db.execute("SELECT project_id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+                return str(row[0] or "") if row else ""
+        except sqlite3.Error:
+            return ""
 
     def add(self, session_id: str, role: str, content: str) -> bool:
         if role not in {"user", "model"}:
