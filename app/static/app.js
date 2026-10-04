@@ -269,8 +269,51 @@ function addResponseActions(group, msg) {
     speechSynthesis.speak(utterance);
   });
 
-  actions.append(copyButton, ttsButton);
+  const feedbackPositive = document.createElement("button");
+  feedbackPositive.type = "button";
+  feedbackPositive.className = "response-action feedback-button";
+  feedbackPositive.setAttribute("aria-label", "Good response");
+  feedbackPositive.innerHTML = "&#128077;<span>Good</span>";
+  feedbackPositive.addEventListener("click", () => submitFeedback(group, "positive", ""));
+
+  const feedbackNegative = document.createElement("button");
+  feedbackNegative.type = "button";
+  feedbackNegative.className = "response-action feedback-button";
+  feedbackNegative.setAttribute("aria-label", "Needs improvement");
+  feedbackNegative.innerHTML = "&#128078;<span>Improve</span>";
+  feedbackNegative.addEventListener("click", () => {
+    const note = window.prompt("What should Strata improve? (Optional)", "");
+    if (note !== null) submitFeedback(group, "negative", note);
+  });
+
+  actions.append(copyButton, ttsButton, feedbackPositive, feedbackNegative);
   group.appendChild(actions);
+}
+
+
+async function submitFeedback(group, rating, note) {
+  if (!group || group.dataset.feedbackSent === "true") return;
+  group.dataset.feedbackSent = "true";
+  const buttons = group.querySelectorAll(".feedback-button");
+  buttons.forEach((button) => button.disabled = true);
+  try {
+    const response = await fetch(API_BASE + "/api/feedback", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        session_id: sessionId,
+        rating,
+        note: String(note || "").slice(0, 1000),
+      }),
+    });
+    if (!response.ok) throw new Error("feedback request failed");
+    const active = group.querySelector(rating === "positive" ? ".feedback-button:nth-last-child(2)" : ".feedback-button:last-child");
+    if (active) active.classList.add("copied");
+  } catch (error) {
+    console.warn("Feedback could not be saved:", error);
+    group.dataset.feedbackSent = "false";
+    buttons.forEach((button) => button.disabled = false);
+  }
 }
 
 function addMessage(role, text, isStatus = false, attachment = null, completed = false) {
@@ -389,6 +432,9 @@ async function sendMessage() {
           ? selectedAttachmentData
           : contextText,
         image_data: selectedAttachment && selectedAttachment.type.startsWith("image/")
+          ? selectedAttachmentData
+          : "",
+        document_data: selectedAttachment && (selectedAttachment.type === "application/pdf" || /\\.pdf$/i.test(selectedAttachment.name || ""))
           ? selectedAttachmentData
           : "",
         attachment_name: selectedAttachment?.name || "",
@@ -764,16 +810,17 @@ async function handleSelectedFile(file, input) {
 
   const textExtensions = /\.(txt|md|markdown|json|csv|log|py|js|jsx|ts|tsx|html|css|xml|yaml|yml|toml|rs|cpp|cc|c|h|hpp|swift|java|go|rb|php|sql|sh)$/i;
   const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
   const isText = file.type.startsWith("text/") || file.type === "application/json" || textExtensions.test(file.name);
 
-  if (!isImage && !isText) {
-    addMessage("assistant", "That file type is not supported yet. Choose a photo or a text/document file.");
+  if (!isImage && !isText && !isPdf) {
+    addMessage("assistant", "That file type is not supported yet. Choose a photo, PDF, or text/document file.");
     if (input) input.value = "";
     return;
   }
 
   selectedAttachment = file;
-  if (isImage) {
+  if (isImage || isPdf) {
     selectedAttachmentData = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
